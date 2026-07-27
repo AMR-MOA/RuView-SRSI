@@ -34,7 +34,7 @@ jobs:
 
     - name: Set up Python
       continue-on-error: true
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@v7
       with:
         python-version: ${{ env.PYTHON_VERSION }}
         cache: 'pip'
@@ -251,7 +251,7 @@ jobs:
 
     - name: Set up Python ${{ matrix.python-version }}
       continue-on-error: true
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@v7
       with:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'
@@ -317,7 +317,7 @@ jobs:
         submodules: recursive
 
     - name: Set up Python
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@v7
       with:
         python-version: ${{ env.PYTHON_VERSION }}
         cache: 'pip'
@@ -461,7 +461,7 @@ jobs:
         submodules: recursive
 
     - name: Set up Python
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@v7
       with:
         python-version: ${{ env.PYTHON_VERSION }}
         cache: 'pip'
