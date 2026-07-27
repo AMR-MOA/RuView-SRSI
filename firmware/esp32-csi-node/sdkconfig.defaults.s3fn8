@@ -1,0 +1,35 @@
+# ESP32-S3FN8 overlay — 8 MB in-package flash, NO PSRAM, native USB only.
+#
+# Layer on top of sdkconfig.defaults:
+#   idf.py -DSDKCONFIG_DEFAULTS='sdkconfig.defaults;sdkconfig.defaults.s3fn8' set-target esp32s3
+#   idf.py -DSDKCONFIG_DEFAULTS='sdkconfig.defaults;sdkconfig.defaults.s3fn8' build
+#
+# Verified against the target chips via espefuse:
+#   FLASH_CAP = 8M / FLASH_VENDOR = GD
+#   PSRAM_CAP = None, PSRAM_CAPACITY = 0
+#   USB mode  = USB-Serial/JTAG
+#
+# Distinct from sdkconfig.defaults.devkitc: that overlay only turns the display
+# off. These boards additionally have no PSRAM and no UART bridge, so WASM and
+# the console routing need handling too.
+
+# ── Display ──────────────────────────────────────────────────────────────
+# The SH8601 QSPI panel is write-only, so display_hal_init_panel() "succeeds"
+# on a bare board. The runtime recovery (FT3168 touch readback, #1000) then
+# bails to headless — but only if it runs correctly. Compiling display support
+# out makes has_display a compile-time false in main.c, so the RuView#893
+# MGMT+DATA promiscuous upgrade always applies and CSI cannot starve at 0 pps.
+# Display also wants SPIRAM for framebuffers, which these chips do not have.
+# CONFIG_DISPLAY_ENABLE is not set
+
+# ── WASM (Tier 3) ────────────────────────────────────────────────────────
+# ADR-040 allocates 4 x 160 KB WASM arenas in PSRAM. PSRAM_CAPACITY = 0 here,
+# so Tier 3 cannot run. components/wasm3/wasm3-src/ is also absent from the
+# tree (CMake would try to fetch it at build time). Saves ~120 KB flash.
+# CONFIG_WASM_ENABLE is not set
+
+# ── Console ──────────────────────────────────────────────────────────────
+# ESP-IDF defaults the console to UART0 (GPIO43/44). These boards expose only
+# the native USB-Serial/JTAG peripheral, so with the default the serial monitor
+# is completely silent and a healthy board looks dead.
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
