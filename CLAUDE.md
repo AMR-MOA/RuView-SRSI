@@ -1,427 +1,352 @@
-# Claude Code Configuration — WiFi-DensePose + Claude Flow V3
+# CLAUDE.md — RuView (WiFi-DensePose)
 
-## Project: wifi-densepose
-
-WiFi-based human pose estimation using Channel State Information (CSI).
-Dual codebase: Python v1 (`v1/`) and Rust port (`v2/`).
-### Key Rust Crates
-| Crate | Description |
-|-------|-------------|
-| `wifi-densepose-core` | Core types, traits, error types, CSI frame primitives |
-| `wifi-densepose-signal` | SOTA signal processing + RuvSense multistatic sensing (16 modules) |
-| `wifi-densepose-nn` | Neural network inference (ONNX, PyTorch, Candle backends) |
-| `wifi-densepose-train` | Training pipeline with ruvector integration + ruview_metrics; MAE pretraining recipe (`mae.rs`, ADR-152 §2.3) + WiFlow-STD port (`wiflow_std/`, tch-gated) |
-| `wifi-densepose-mat` | Mass Casualty Assessment Tool — disaster survivor detection |
-| `wifi-densepose-hardware` | ESP32 aggregator, TDM protocol, channel hopping firmware; `ieee80211bf/` 802.11bf forward-compat protocol model (ADR-153) |
-| `wifi-densepose-ruvector` | RuVector v2.0.4 integration + cross-viewpoint fusion (5 modules) |
-| `wifi-densepose-wasm` | WebAssembly bindings for browser deployment |
-| `wifi-densepose-cli` | CLI tool (`wifi-densepose` binary) — `calibrate`/`calibrate-serve`/`enroll`/`train-room`/`room-watch` + MAT (MAT gated behind the `mat` feature; build `--no-default-features` for the aarch64/appliance calibration binary) |
-| `wifi-densepose-calibration` | ADR-151 per-room calibration & specialist training — `baseline → enroll → extract → train` → bank of small specialists (presence/posture/breathing/heartbeat/restlessness/anomaly) + multistatic fusion; pure Rust, edge-deployable |
-| `wifi-densepose-sensing-server` | Lightweight Axum server for WiFi sensing UI |
-| `wifi-densepose-wifiscan` | Multi-BSSID WiFi scanning (ADR-022) |
-| `wifi-densepose-vitals` | ESP32 CSI-grade vital sign extraction (ADR-021) |
-| `nvsim` | Deterministic NV-diamond magnetometer pipeline simulator (ADR-089) — standalone leaf, WASM-ready |
-| `vendor/rvcsi` (submodule) | **rvCSI** — edge RF sensing runtime (ADR-095/096): 9 crates (`rvcsi-core`/`-dsp`/`-events`/`-adapter-file`/`-adapter-nexmon`/`-ruvector`/`-runtime`/`-node`/`-cli`). Lives in its own repo ([github.com/ruvnet/rvcsi](https://github.com/ruvnet/rvcsi)), vendored here under `vendor/rvcsi`, published to crates.io as `rvcsi-* 0.3.x` and to npm as `@ruv/rvcsi`. Not a `v2/` workspace member — depend on the published crates (or the submodule's `crates/rvcsi-*` paths). Normalized `CsiFrame`/`CsiWindow`/`CsiEvent` schema, validate-before-FFI, reusable DSP, typed confidence-scored events, the napi-c Nexmon shim (real nexmon_csi `.pcap` from a Raspberry Pi 5 / 4 / 3B+ — BCM43455c0), the napi-rs SDK, the `rvcsi` CLI, a Claude Code plugin. |
-| `vendor/rufield` (submodule) | **RuField MFS** — the open spec for camera-free multimodal field sensing (ADR-260). A common `FieldEvent`/`FieldTensor`/`FusionGraph`/`PrivacyClass`/`ProvenanceReceipt` model *above* WiFi CSI/CIR/BFLD, UWB, BLE Channel Sounding, mmWave radar, ultrasound, subsonic, infrared, and quantum sensors. Lives in its own repo ([github.com/ruvnet/rufield](https://github.com/ruvnet/rufield)), vendored here under `vendor/rufield`. Not a `v2/` workspace member. v0.1 reference stack = 7 crates (`rufield-core`/`-provenance`/`-privacy`/`-adapters`/`-fusion`/`-bench`/`-viewer`), 72 tests/0 failed; `rufield-viewer` is an Axum + vanilla-JS read-only dashboard (`cargo run -p rufield-viewer`) completing ADR-260 §27.9. The WiFi-CSI modality is now **real-replay-backed** via `CsiReplayAdapter` (ingests real captured `.csi.jsonl` → fused presence/breathing inferences; replay-from-file, unlabeled CSI-variance proxy, not validated accuracy); mmWave/thermal + all synthetic-bench F1 numbers remain **SYNTHETIC** (no live hardware — live streaming + labeled accuracy are roadmap). |
-| `wifi-densepose-rufield` | ADR-262 P1 **anti-corruption bridge** — converts RuView WiFi-CSI sensing output (`SensingSnapshot` mirroring `SensingUpdate` + `TrustedOutput`, owned primitives, no dep on `wifi-densepose-sensing-server`) into **signed RuField `FieldEvent`s** (`Modality::WifiCsi`, real `timestamp_ns`, sha256 + ed25519 provenance, `synthetic=false`). The single coupling point between RuView and the standalone RuField MFS spec (§5.4); path-deps the `vendor/rufield` submodule crates (`rufield-core`/`-provenance`/`-privacy`/`-fusion`). **Critical §3.3 privacy mapping** (`map_privacy`): maps RuView class → RuField P0–P5 by **information content, never byte value**, fail-closed (`Derived → P4/P5`, never P1; `demoted` floors to ≥ P2). 15 tests / 0 failed (round-trip / `is_fusable` / fusion-ingest / privacy-safety / determinism). P1 plumbing — not wired into the live server (P3), no accuracy claim. |
-| `ruview-swarm` | Drone swarm control system (ADR-148) — hierarchical-mesh topology, Raft consensus, MARL, CSI sensing payload, MAVLink/PX4 compat, Ruflo AI-agent integration |
-| `ruview-unified` | ADR-273..282 **unified RF spatial world model**: authoritative native `RfFrameV2` frame contract (native IQ never overwritten, phase-state/evidence-ladder/provenance invariants) with the canonical `RfTensor` as a derived view; fail-closed hardware adapter registry (WiFi CSI / FMCW cube / UWB CIR / 5G SRS / BLE Channel Sounding with phase-vs-RTT cross-validated ranging); universal RF foundation encoder (masked-reconstruction pretraining with finite-difference-verified backprop, `z = Enc ⊙ σ(AgeEnc(log age)) + Geom` fusion, ≤1% scalar / <2% structured task adapters incl. RePos-factorized pose); RF-aware Gaussian spatial memory (fusion/decay/channel-gain queries + inverse updates, lineage receipts, task-gated scene graph); physics-guided synthetic RF world generator (image-method multipath, Fresnel materials, emergent Doppler, seeded domain randomization); edge sensing control plane (802.11bf/ETSI-ISAC purposes/zones/tasks, AoI active-sensing planner, fail-closed coherent-aperture fusion, governed RIS actuation; raw RF structurally unexportable); delay-Doppler-native transforms. Pure Rust leaf; all accuracy numbers SYNTHETIC (evidence level L0) until real-data validation. |
-
-### RuvSense Modules (`signal/src/ruvsense/`)
-| Module | Purpose |
-|--------|---------|
-| `multiband.rs` | Multi-band CSI frame fusion, cross-channel coherence |
-| `phase_align.rs` | Iterative LO phase offset estimation, circular mean |
-| `multistatic.rs` | Attention-weighted fusion, geometric diversity |
-| `coherence.rs` | Z-score coherence scoring, DriftProfile |
-| `coherence_gate.rs` | Accept/PredictOnly/Reject/Recalibrate gate decisions |
-| `pose_tracker.rs` | 17-keypoint Kalman tracker with AETHER re-ID embeddings |
-| `field_model.rs` | SVD room eigenstructure, perturbation extraction |
-| `tomography.rs` | RF tomography, ISTA L1 solver, voxel grid |
-| `longitudinal.rs` | Welford stats, biomechanics drift detection |
-| `intention.rs` | Pre-movement lead signals (200-500ms) |
-| `cross_room.rs` | Environment fingerprinting, transition graph |
-| `gesture.rs` | DTW template matching gesture classifier |
-| `adversarial.rs` | Physically impossible signal detection, multi-link consistency |
-| `cir.rs` | ADR-134 CSI→CIR via ISTA L1 sparse recovery (NeumannSolver warm-start) |
-| `calibration.rs` | ADR-135 empty-room baseline (Welford amplitude + von Mises phase, drift trigger) |
-
-### Cross-Viewpoint Fusion (`ruvector/src/viewpoint/`)
-| Module | Purpose |
-|--------|---------|
-| `attention.rs` | CrossViewpointAttention, GeometricBias, softmax with G_bias |
-| `geometry.rs` | GeometricDiversityIndex, Cramer-Rao bounds, Fisher Information |
-| `coherence.rs` | Phase phasor coherence, hysteresis gate |
-| `fusion.rs` | MultistaticArray aggregate root, domain events |
-
-### RuVector v2.0.4 Integration (ADR-016 complete, ADR-017 proposed)
-All 5 ruvector crates integrated in workspace:
-- `ruvector-mincut` → `metrics.rs` (DynamicPersonMatcher) + `subcarrier_selection.rs`
-- `ruvector-attn-mincut` → `model.rs` (apply_antenna_attention) + `spectrogram.rs`
-- `ruvector-temporal-tensor` → `dataset.rs` (CompressedCsiBuffer) + `breathing.rs`
-- `ruvector-solver` → `subcarrier.rs` (sparse interpolation 114→56) + `triangulation.rs`
-- `ruvector-attention` → `model.rs` (apply_spatial_attention) + `bvp.rs`
-
-### Architecture Decisions
-205 ADRs in `docs/adr/` (numbered ADR-001 through ADR-282, with gaps). Key ones:
-- ADR-014: SOTA signal processing (Accepted)
-- ADR-015: MM-Fi + Wi-Pose training datasets (Accepted)
-- ADR-016: RuVector training pipeline integration (Accepted — complete)
-- ADR-017: RuVector signal + MAT integration (Proposed — next target)
-- ADR-024: Contrastive CSI embedding / AETHER (Accepted)
-- ADR-027: Cross-environment domain generalization / MERIDIAN (Accepted)
-- ADR-028: ESP32 capability audit + witness verification (Accepted)
-- ADR-029: RuvSense multistatic sensing mode (Proposed)
-- ADR-030: RuvSense persistent field model (Proposed)
-- ADR-031: RuView sensing-first RF mode (Proposed)
-- ADR-032: Multistatic mesh security hardening (Proposed)
-- ADR-148: Drone swarm control system / `ruview-swarm` (In Progress)
-- ADR-152: WiFi-Pose SOTA 2026 intake — geometry conditioning, WiFlow-STD benchmark (measurement (a) complete: claims MEASURED-EQUIVALENT at ~96% PCK@20), MAE recipe (Proposed; §2.1–2.3, 2.6 implemented)
-- ADR-153: IEEE 802.11bf-2025 forward-compatibility protocol model (Accepted — amends ADR-152 §2.4)
-- ADR-182: `npx ruview` harness minted via MetaHarness (Accepted — P1+P2 shipped as `@ruvnet/ruview`)
-- ADR-263: `@ruvnet/ruview` npm harness deep review + optimization strategy (Proposed)
-- ADR-264: `@ruvnet/rvagent` MCP server + `@ruv/ruview-cli` deep review + optimization strategy (Proposed)
-- ADR-265: RuView npm distribution strategy — CI gate, provenance, version single-sourcing (Proposed)
-- ADR-273: Unified RF spatial world model — umbrella + anti-leakage evaluation protocol + acceptance gates (Accepted — P1 implemented in `ruview-unified`)
-- ADR-274: Universal RF foundation encoder + hardware adapter registry (Accepted — P1 implemented)
-- ADR-275: RF-aware Gaussian spatial memory — fusion, decay, channel-gain queries, inverse updates, task-gated scene graph (Accepted — P1 implemented)
-- ADR-276: Physics-guided synthetic RF world generator — randomize physics, not textures (Accepted — P1 implemented)
-- ADR-277: Edge sensing control plane — purposes/zones/retention/identity double-gate; raw RF unexportable (Accepted — P1 implemented)
-- ADR-278: Radar inverse rendering + differentiable RF SLAM research program — RISE/DiffRadar/GeRaF reproduction gates (Proposed)
-- ADR-279: Native RF frame contract — `RfFrameV2` authoritative, canonical tensor demoted to derived view; 7 invariants; split manifest with session dimension (Accepted — implemented)
-- ADR-280: Active sensing & programmable perception — sensing tasks/actions, AoI freshness scheduler (95% traffic reduction measured), fail-closed coherent-aperture fusion, governed RIS actuation, task-sufficient representations (Accepted — implemented)
-- ADR-281: BLE Channel Sounding (phase vs RTT cross-validated ranging), delay-Doppler-native tensors, IEEE P3162 import profile, RePos factorized pose (Accepted — implemented)
-- ADR-282: Ecosystem positioning — RuView as edge RF perception runtime; RuField/RuVector/MetaHarness layering; mandatory L0–L5 evidence ladder (Accepted)
-
-### Supported Hardware
-
-| Device | Port | Chip | Role | Cost |
-|--------|------|------|------|------|
-| ESP32-S3 (8MB flash) | COM9 (ruvzen, was COM7) | Xtensa dual-core | WiFi CSI sensing node | ~$9 |
-| ESP32-S3 SuperMini (4MB) | — | Xtensa dual-core | WiFi CSI (compact) | ~$6 |
-| ESP32-C6 + Seeed MR60BHA2 | COM12 (ruvzen, was COM4) | RISC-V + 60 GHz FMCW | mmWave HR/BR/presence + WiFi CSI | ~$15 |
-| HLK-LD2410 | — | 24 GHz FMCW | Presence + distance | ~$3 |
-
-**Not supported:** ESP32 (original), ESP32-C3 — single-core, can't run CSI DSP pipeline.
-
-**⚠️ Compact boards (SuperMini, ESP32-S3-Zero, other coin-sized clones) run hot:** the firmware keeps the WiFi radio on continuously (`WIFI_PS_NONE`) and runs a full DSP pipeline (`edge_tier=2`), which is sustained high current draw. Full-size dev boards handle this fine; coin-sized clones with minimal PCB copper and budget regulators can run uncomfortably hot and, per at least one field report, have failed to power on again after a hot session. Give them airflow and check by touch during the first few minutes. See `firmware/esp32-csi-node/README.md` for details.
-
-### Build & Test Commands (this repo)
-```bash
-# Rust — full workspace tests (1,031+ tests, ~2 min)
-cd v2
-cargo test --workspace --no-default-features
-
-# Rust — single crate check (no GPU needed)
-cargo check -p wifi-densepose-train --no-default-features
-
-# Python — deterministic proof verification (SHA-256)
-python archive/v1/data/proof/verify.py
-
-# Python — test suite
-cd archive/v1 && python -m pytest tests/ -x -q
-```
-
-### ESP32 Firmware Build (Windows — Python subprocess required)
-```bash
-# Build 8MB firmware (real WiFi CSI mode, no mocks)
-# See CLAUDE.local.md for the full Python subprocess command
-# Key: must strip MSYSTEM env vars for ESP-IDF v5.4 on Git Bash
-
-# Build 4MB firmware
-cp sdkconfig.defaults.4mb sdkconfig.defaults
-# then same build process
-
-# Flash to COM7
-# [python, idf_py, '-p', 'COM7', 'flash']
-
-# Provision WiFi
-python firmware/esp32-csi-node/provision.py --port COM7 \
-  --ssid "YourWiFi" --password "secret" --target-ip 192.168.1.20
-
-# Monitor serial
-python -m serial.tools.miniterm COM7 115200
-```
-
-### Firmware Release Process
-1. Build 8MB from `sdkconfig.defaults.template` (no mock)
-2. Build 4MB from `sdkconfig.defaults.4mb` (no mock)
-3. Save 6 binaries: `esp32-csi-node.bin`, `bootloader.bin`, `partition-table.bin`, `ota_data_initial.bin`, `esp32-csi-node-4mb.bin`, `partition-table-4mb.bin`
-4. Tag: `git tag v0.X.Y-esp32 && git push origin v0.X.Y-esp32`
-5. Release: `gh release create v0.X.Y-esp32 <binaries> --title "..." --notes-file ...`
-6. Verify on real hardware (COM7) before publishing
-7. **CRITICAL:** Always test with real WiFi CSI, not mock mode — mock missed the Kconfig threshold bug
-
-### Crate Publishing Order
-Crates must be published in dependency order:
-1. `wifi-densepose-core` (no internal deps)
-2. `wifi-densepose-vitals` (no internal deps)
-3. `wifi-densepose-wifiscan` (no internal deps)
-4. `wifi-densepose-hardware` (no internal deps)
-5. `wifi-densepose-signal` (depends on core)
-6. `wifi-densepose-nn` (no internal deps, workspace only)
-7. `wifi-densepose-ruvector` (no internal deps, workspace only)
-8. `wifi-densepose-train` (depends on signal, nn)
-9. `wifi-densepose-mat` (depends on core, signal, nn)
-10. `wifi-densepose-wasm` (depends on mat)
-11. `wifi-densepose-sensing-server` (depends on wifiscan)
-12. `wifi-densepose-cli` (depends on mat)
-
-### Validation & Witness Verification (ADR-028)
-
-**After any significant code change, run the full validation:**
-
-```bash
-# 1. Rust tests — must be 1,031+ passed, 0 failed
-cd v2
-cargo test --workspace --no-default-features
-
-# 2. Python proof — must print VERDICT: PASS
-cd ..
-python archive/v1/data/proof/verify.py
-
-# 3. Generate witness bundle (includes both above + firmware hashes)
-bash scripts/generate-witness-bundle.sh
-
-# 4. Self-verify the bundle — must be 7/7 PASS
-cd dist/witness-bundle-ADR028-*/
-bash VERIFY.sh
-```
-
-**If the Python proof hash changes** (e.g., numpy/scipy version update):
-```bash
-# Regenerate the expected hash, then verify it passes
-python archive/v1/data/proof/verify.py --generate-hash
-python archive/v1/data/proof/verify.py
-```
-
-**Witness bundle contents** (`dist/witness-bundle-ADR028-<sha>.tar.gz`):
-- `WITNESS-LOG-028.md` — 33-row attestation matrix with evidence per capability
-- `ADR-028-esp32-capability-audit.md` — Full audit findings
-- `proof/verify.py` + `expected_features.sha256` — Deterministic pipeline proof
-- `test-results/rust-workspace-tests.log` — Full cargo test output
-- `firmware-manifest/source-hashes.txt` — SHA-256 of all 7 ESP32 firmware files
-- `crate-manifest/versions.txt` — All 15 crates with versions
-- `VERIFY.sh` — One-command self-verification for recipients
-
-**Key proof artifacts:**
-- `archive/v1/data/proof/verify.py` — Trust Kill Switch: feeds reference signal through production pipeline, hashes output
-- `archive/v1/data/proof/expected_features.sha256` — Published expected hash
-- `archive/v1/data/proof/sample_csi_data.json` — 1,000 synthetic CSI frames (seed=42)
-- `docs/WITNESS-LOG-028.md` — 11-step reproducible verification procedure
-- `docs/adr/ADR-028-esp32-capability-audit.md` — Complete audit record
-
-### Branch
-Default branch: `main`
-Active feature branch: `ruvsense-full-implementation` (PR #77)
+Guidance for Claude Code when working in this repository.
 
 ---
 
-## Behavioral Rules (Always Enforced)
+## 1. What this project is
 
-- Do what has been asked; nothing more, nothing less
-- NEVER create files unless they're absolutely necessary for achieving your goal
-- ALWAYS prefer editing an existing file to creating a new one
-- NEVER proactively create documentation files (*.md) or README files unless explicitly requested
-- NEVER save working files, text/mds, or tests to the root folder
-- Never continuously check status after spawning a swarm — wait for results
-- ALWAYS read a file before editing it
-- NEVER commit secrets, credentials, or .env files
+RuView turns ordinary WiFi radio into a contactless sensor. ESP32-S3 nodes capture
+**Channel State Information** (CSI) — the per-subcarrier complex channel response the
+WiFi radio already computes — and stream it over UDP to a host. Host-side DSP turns
+those perturbations into presence, breathing rate, heart rate, motion, fall events,
+and (aspirationally) pose.
 
-## File Organization
+| Path | Language | Status |
+|------|----------|--------|
+| `v2/` | Rust workspace, ~40 crates | **Primary.** All active work. |
+| `firmware/esp32-csi-node/` | C (ESP-IDF v5.4) | Node firmware. Dual-target ESP32-S3 / ESP32-C6. |
+| `archive/v1/` | Python | Archived. Kept for the deterministic proof (`data/proof/verify.py`) and reference DSP. |
+| `python/` | Rust + PyO3 | `ruview` / `wifi-densepose` PyPI wheels. |
 
-- NEVER save to root folder — use the directories below
-- `docs/adr/` — Architecture Decision Records (43 ADRs)
-- `docs/ddd/` — Domain-Driven Design models
-- `v2/crates/` — Rust workspace crates (15 crates)
-- `v2/crates/wifi-densepose-signal/src/ruvsense/` — RuvSense multistatic modules (14 files)
-- `v2/crates/wifi-densepose-ruvector/src/viewpoint/` — Cross-viewpoint fusion (5 files)
-- `v2/crates/wifi-densepose-hardware/src/esp32/` — ESP32 TDM protocol
-- `firmware/esp32-csi-node/main/` — ESP32 C firmware (channel hopping, NVS config, TDM)
-- `archive/v1/src/` — Python source (core, hardware, services, api)
-- `archive/v1/data/proof/` — Deterministic CSI proof bundles
-- `.claude-flow/` — Claude Flow coordination state (committed for team sharing)
-- `.claude/` — Claude Code settings, agents, memory (committed for team sharing)
+---
 
-## Project Architecture
+## 2. Repository layout
 
-- Follow Domain-Driven Design with bounded contexts
-- Keep files under 500 lines
-- Use typed interfaces for all public APIs
-- Prefer TDD London School (mock-first) for new code
-- Use event sourcing for state changes
-- Ensure input validation at system boundaries
-
-### Project Config
-
-- **Topology**: hierarchical-mesh
-- **Max Agents**: 15
-- **Memory**: hybrid
-- **HNSW**: Enabled
-- **Neural**: Enabled
-
-## Pre-Merge Checklist
-
-Before merging any PR, verify each item applies and is addressed:
-
-1. **Rust tests pass** — `cargo test --workspace --no-default-features` (1,031+ passed, 0 failed)
-2. **Python proof passes** — `python archive/v1/data/proof/verify.py` (VERDICT: PASS)
-3. **README.md** — Update platform tables, crate descriptions, hardware tables, feature summaries if scope changed
-4. **CLAUDE.md** — Update crate table, ADR list, module tables, version if scope changed
-5. **CHANGELOG.md** — Add entry under `[Unreleased]` with what was added/fixed/changed
-6. **User guide** (`docs/user-guide.md`) — Update if new data sources, CLI flags, or setup steps were added
-7. **ADR index** — Update ADR count in README docs table if a new ADR was created
-8. **Witness bundle** — Regenerate if tests or proof hash changed: `bash scripts/generate-witness-bundle.sh`
-9. **Docker Hub image** — Only rebuild if Dockerfile, dependencies, or runtime behavior changed
-10. **Crate publishing** — Only needed if a crate is published to crates.io and its public API changed
-11. **`.gitignore`** — Add any new build artifacts or binaries
-12. **Security audit** — Run security review for new modules touching hardware/network boundaries
-
-## Build & Test
-
-```bash
-# Build
-npm run build
-
-# Test
-npm test
-
-# Lint
-npm run lint
+```
+firmware/esp32-csi-node/   ESP-IDF C firmware — CSI capture, tiered DSP, UDP sender,
+                           NVS runtime config, OTA + WASM HTTP server (port 8032)
+v2/crates/                 Rust workspace (see §3)
+ui/                        Vanilla-JS dashboard + Observatory served by sensing-server
+dashboard/                 Vite/TS dashboard (separate, newer)
+examples/                  Runnable examples — see §7
+scripts/                   Host-side Python/JS tooling (relays, recorders, trainers)
+docs/adr/                  Architecture Decision Records — ADR-001..ADR-282 (with gaps)
+docs/user-guide.md         2500-line operator guide — the single best doc to read
+docs/TROUBLESHOOTING.md    11 real, reproduced field failures + fixes. Read before debugging.
+plans/                     Implementation and test plans
+archive/v1/data/proof/     Deterministic pipeline proof (SHA-256 "Trust Kill Switch")
+vendor/                    Git submodules (rvcsi, rufield, ruvector, ...)
 ```
 
-- ALWAYS run tests after making code changes
-- ALWAYS verify build succeeds before committing
+**Never write working files, scratch notes, or tests to the repo root.**
 
-## Security Rules
+---
 
-- NEVER hardcode API keys, secrets, or credentials in source files
-- NEVER commit .env files or any file containing secrets
-- Always validate user input at system boundaries
-- Always sanitize file paths to prevent directory traversal
-- Run `npx @claude-flow/cli@latest security scan` after security-related changes
+## 3. Key Rust crates (`v2/crates/`)
 
-## Concurrency: 1 MESSAGE = ALL RELATED OPERATIONS
+The workspace is large. These are the ones that matter day to day:
 
-- All operations MUST be concurrent/parallel in a single message
-- Use Claude Code's Task tool for spawning agents, not just MCP
-- ALWAYS batch ALL todos in ONE TodoWrite call (5-10+ minimum)
-- ALWAYS spawn ALL agents in ONE message with full instructions via Task tool
-- ALWAYS batch ALL file reads/writes/edits in ONE message
-- ALWAYS batch ALL Bash commands in ONE message
+| Crate | Binary | What it does |
+|-------|--------|--------------|
+| `wifi-densepose-core` | — | `CsiFrame` and core types. Everything depends on this. |
+| `wifi-densepose-signal` | — | DSP + the 16 RuvSense multistatic modules (`src/ruvsense/`) |
+| `wifi-densepose-sensing-server` | `sensing-server` | **The hub.** UDP CSI in → DSP → REST + WebSocket + static UI out. |
+| `wifi-densepose-cli` | `wifi-densepose` | `calibrate` / `calibrate-serve` / `enroll` / `train-room` / `room-status` / `room-watch` (+ `mat` behind a feature) |
+| `wifi-densepose-calibration` | — | ADR-151 per-room baseline → enrollment → specialist bank. Pure Rust, edge-deployable. |
+| `wifi-densepose-vitals` | — | Breathing / heart-rate extraction (ADR-021) |
+| `wifi-densepose-hardware` | — | ESP32 aggregator, TDM protocol, ADR-018 frame decode |
+| `wifi-densepose-ruvector` | — | RuVector integration + cross-viewpoint fusion (`src/viewpoint/`) |
+| `wifi-densepose-mat` | — | Mass Casualty Assessment Tool |
+| `wifi-densepose-train` | — | Training pipeline, MAE pretraining, WiFlow-STD port |
+| `ruview-unified` | — | ADR-273..282 unified RF spatial world model. Pure leaf; all numbers L0/synthetic. |
 
-## Swarm Orchestration
+RuvSense modules live in `wifi-densepose-signal/src/ruvsense/`: `multiband`,
+`phase_align`, `multistatic`, `coherence`, `coherence_gate`, `pose_tracker`,
+`field_model`, `tomography`, `longitudinal`, `intention`, `cross_room`, `gesture`,
+`adversarial`, `cir`, `calibration`.
 
-- MUST initialize the swarm using CLI tools when starting complex tasks
-- MUST spawn concurrent agents using Claude Code's Task tool
-- Never use CLI tools alone for execution — Task tool agents do the actual work
-- MUST call CLI tools AND Task tool in ONE message for complex work
+Excluded from the workspace (build separately, `wasm32-unknown-unknown` targets):
+`wifi-densepose-wasm-edge`, `homecore-plugin-example`, `crates/worldgraph`.
 
-### 3-Tier Model Routing (ADR-026)
+---
 
-| Tier | Handler | Latency | Cost | Use Cases |
-|------|---------|---------|------|-----------|
-| **1** | Agent Booster (WASM) | <1ms | $0 | Simple transforms (var→const, add types) — Skip LLM |
-| **2** | Haiku | ~500ms | $0.0002 | Simple tasks, low complexity (<30%) |
-| **3** | Sonnet/Opus | 2-5s | $0.003-0.015 | Complex reasoning, architecture, security (>30%) |
+## 4. This machine (verified 2026-07-27)
 
-- Always check for `[AGENT_BOOSTER_AVAILABLE]` or `[TASK_MODEL_RECOMMENDATION]` before spawning agents
-- Use Edit tool directly when `[AGENT_BOOSTER_AVAILABLE]`
+A snapshot — re-verify before trusting it.
 
-## Swarm Configuration & Anti-Drift
+| Thing | State |
+|-------|-------|
+| OS | Windows 11 Education, 10.0.22631 |
+| Shell | PowerShell 5.1 primary; Git Bash also available |
+| Python | 3.11.15 at `C:\Espressif\tools\python\python.exe` — numpy 2.4.6, scipy 1.17.1, pyserial 3.5, paho-mqtt 2.1.0, websockets 16.1.1. **No esptool.** |
+| ESP-IDF venv Python | `C:\Espressif\tools\python\v6.0.2\venv\Scripts\python.exe` — **has esptool 5.3.1** |
+| ESP-IDF | **v6.0.2** at `C:\esp\v6.0.2\esp-idf`. Firmware targets **v5.4** — see §5. |
+| Docker | CLI 29.2.1 installed, **daemon not running** |
+| Rust / cargo | **Not installed** |
+| Node / npm | **Not installed** |
+| Git submodules | **Not initialised** — see §6 |
 
-- ALWAYS use hierarchical topology for coding swarms
-- Keep maxAgents at 6-8 for tight coordination
-- Use specialized strategy for clear role boundaries
-- Use `raft` consensus for hive-mind (leader maintains authoritative state)
-- Run frequent checkpoints via `post-task` hooks
-- Keep shared memory namespace for all agents
+### Hardware inventory
 
-```bash
-npx @claude-flow/cli@latest swarm init --topology hierarchical --max-agents 8 --strategy specialized
+Two ESP32-S3 boards connected at scan time; six total available.
+
+| Port | MAC | Chip |
+|------|-----|------|
+| COM3 | `f4:12:fa:9d:b6:a4` | ESP32-S3 (QFN56) rev v0.1 |
+| COM4 | `f4:12:fa:9d:b6:d4` | ESP32-S3 (QFN56) rev v0.1 |
+
+eFuse readout — authoritative, not inferred from the board silkscreen:
+
+```
+FLASH_CAP  = 8M       FLASH_VENDOR   = GD
+PSRAM_CAP  = None     PSRAM_CAPACITY = 0
+USB mode   = USB-Serial/JTAG   (USB VID 303A / PID 1001)
 ```
 
-## Swarm Execution Rules
+**8 MB in-package flash, zero PSRAM, native-USB only** — an `ESP32-S3FN8`-class
+part. Three load-bearing consequences:
 
-- ALWAYS use `run_in_background: true` for all agent Task calls
-- ALWAYS put ALL agent Task calls in ONE message for parallel execution
-- After spawning, STOP — do NOT add more tool calls or check status
-- Never poll TaskOutput or check swarm status — trust agents to return
-- When agent results arrive, review ALL results before proceeding
+1. **Tier 3 WASM programmable sensing is unavailable.** It allocates 4 × 160 KB
+   PSRAM arenas and there is no PSRAM. Independently, `components/wasm3/wasm3-src/`
+   is absent from the tree, so WASM3 has to be fetched at build time anyway.
+2. **The AMOLED display path is irrelevant** — and actively dangerous, see §6.3.
+3. **The default ESP-IDF console is UART0**, which is not routed to the native USB
+   port. Without `CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y` the serial monitor is
+   silent on these boards, and every "is it alive?" check fails misleadingly.
 
-## V3 CLI Commands
+Tier 0 (raw CSI), Tier 1 (phase unwrap + Welford + top-K) and Tier 2 (vitals,
+presence, fall) are all fully available.
 
-### Core Commands
+---
 
-| Command | Subcommands | Description |
-|---------|-------------|-------------|
-| `init` | 4 | Project initialization |
-| `agent` | 8 | Agent lifecycle management |
-| `swarm` | 6 | Multi-agent swarm coordination |
-| `memory` | 11 | AgentDB memory with HNSW search |
-| `task` | 6 | Task creation and lifecycle |
-| `session` | 7 | Session state management |
-| `hooks` | 17 | Self-learning hooks + 12 workers |
-| `hive-mind` | 6 | Byzantine fault-tolerant consensus |
+## 5. Build & test
 
-### Quick CLI Examples
+### Rust
+
+The workspace pins **Rust 1.89** via `v2/rust-toolchain.toml`. On Windows this needs
+the MSVC linker (Visual Studio Build Tools, C++ workload).
 
 ```bash
-npx @claude-flow/cli@latest init --wizard
-npx @claude-flow/cli@latest agent spawn -t coder --name my-coder
-npx @claude-flow/cli@latest swarm init --v3-mode
-npx @claude-flow/cli@latest memory search --query "authentication patterns"
-npx @claude-flow/cli@latest doctor --fix
+# One-time. cargo FAILS without this — ruv-neural, ruview-swarm and worldgraph
+# are workspace members whose directories are currently empty.
+git submodule update --init --recursive
+
+cd v2
+cargo test --workspace --no-default-features        # ~2 min
+cargo build --release -p wifi-densepose-sensing-server
+cargo build --release -p wifi-densepose-cli --no-default-features
 ```
 
-## Available Agents (60+ Types)
+`--no-default-features` matters in two distinct ways:
 
-### Core Development
-`coder`, `reviewer`, `tester`, `planner`, `researcher`
+- On the **workspace**, it drops the `ndarray-linalg` / OpenBLAS chain that would
+  otherwise need vcpkg on Windows (issues #366, #415).
+- On **`wifi-densepose-cli`**, it drops the `mat` feature → drops
+  `wifi-densepose-nn` → drops `ort` (ONNX) → drops `openssl-sys`. The calibration
+  path needs none of it.
 
-### Specialized
-`security-architect`, `security-auditor`, `memory-specialist`, `performance-engineer`
+`wifi-densepose-sensing-server` has `default = []`, so a plain `-p` build of it is
+already Windows-friendly.
 
-### Swarm Coordination
-`hierarchical-coordinator`, `mesh-coordinator`, `adaptive-coordinator`
-
-### GitHub & Repository
-`pr-manager`, `code-review-swarm`, `issue-tracker`, `release-manager`
-
-### SPARC Methodology
-`sparc-coord`, `sparc-coder`, `specification`, `pseudocode`, `architecture`
-
-## Memory Commands Reference
+### Python (no Rust needed)
 
 ```bash
-# Store (REQUIRED: --key, --value; OPTIONAL: --namespace, --ttl, --tags)
-npx @claude-flow/cli@latest memory store --key "pattern-auth" --value "JWT with refresh" --namespace patterns
-
-# Search (REQUIRED: --query; OPTIONAL: --namespace, --limit, --threshold)
-npx @claude-flow/cli@latest memory search --query "authentication patterns"
-
-# List (OPTIONAL: --namespace, --limit)
-npx @claude-flow/cli@latest memory list --namespace patterns --limit 10
-
-# Retrieve (REQUIRED: --key; OPTIONAL: --namespace)
-npx @claude-flow/cli@latest memory retrieve --key "pattern-auth" --namespace patterns
+python archive/v1/data/proof/verify.py            # must print "VERDICT: PASS"
+python archive/v1/data/proof/verify.py --generate-hash   # if numpy/scipy drifted
 ```
 
-## Quick Setup
+### Firmware
+
+Both paths work; pick based on what is running.
+
+**Path A — Docker** (what the repo documents; needs the daemon up):
 
 ```bash
-claude mcp add claude-flow -- npx -y @claude-flow/cli@latest
-npx @claude-flow/cli@latest daemon start
-npx @claude-flow/cli@latest doctor --fix
+MSYS_NO_PATHCONV=1 docker run --rm \
+  -v "$(pwd)/firmware/esp32-csi-node:/project" -w /project \
+  espressif/idf:v5.4 bash -c \
+  "rm -rf build sdkconfig && idf.py set-target esp32s3 && idf.py build"
 ```
 
-## Claude Code vs CLI Tools
+**Path B — native Windows, no Docker.** ESP-IDF works fine from **PowerShell**; the
+repo's "Docker is the only reliable method" warning is specifically about Git Bash /
+MSYS2, where `idf.py` detects `MSYSTEM` and silently skips `main()`. This machine has
+ESP-IDF **v6.0.2**, but the firmware targets **v5.4** and is not known to build on
+v6 — install v5.4 side-by-side (the ESP-IDF installer supports multiple versions)
+and export it before building. `firmware/esp32-csi-node/build_firmware.ps1` is a
+working template whose paths are hardcoded to a different machine and must be edited.
 
-- Claude Code's Task tool handles ALL execution: agents, file ops, code generation, git
-- CLI tools handle coordination via Bash: swarm init, memory, hooks, routing
-- NEVER use CLI tools as a substitute for Task tool agents
+Flash offsets must match `partitions_display.csv` (8 MB):
 
-## Support
+```
+bootloader       0x0
+partition-table  0x8000
+nvs              0x9000
+otadata          0xf000
+app (ota_0)      0x20000
+```
 
-- Documentation: https://github.com/ruvnet/claude-flow
-- Issues: https://github.com/ruvnet/claude-flow/issues
+Use the ESP-IDF venv Python — it is the one with esptool:
+
+```powershell
+$py = 'C:\Espressif\tools\python\v6.0.2\venv\Scripts\python.exe'
+& $py -m esptool --chip esp32s3 --port COM3 --baud 460800 `
+  write_flash --flash_mode dio --flash_size 8MB `
+  0x0     build/bootloader/bootloader.bin `
+  0x8000  build/partition_table/partition-table.bin `
+  0xf000  build/ota_data_initial.bin `
+  0x20000 build/esp32-csi-node.bin
+```
+
+Runtime config goes to NVS without reflashing:
+
+```powershell
+& $py firmware/esp32-csi-node/provision.py --port COM3 `
+  --ssid "SSID" --password "PASS" --target-ip 192.168.1.20 `
+  --node-id 1 --edge-tier 2
+```
+
+---
+
+## 6. Gotchas that will cost you hours
+
+All verified in this tree, not folklore.
+
+1. **Submodules are not initialised.** `cargo test --workspace` fails immediately.
+   Run `git submodule update --init --recursive` first.
+
+2. **The prebuilt `release_bins/` are stale and unsafe for these boards.**
+   They are v0.6.7, committed 2026-06-02. The display false-positive fix (`#1000`,
+   commit `65e29ef4`) landed 2026-06-17, and `firmware/esp32-csi-node/version.txt`
+   now reads **0.8.4**. Flashing the prebuilt binaries onto a display-less board
+   risks exactly the 0 pps CSI starvation that fix addresses. **Build from source.**
+
+3. **`CONFIG_DISPLAY_ENABLE` defaults to `y`.** The SH8601 QSPI panel is write-only,
+   so `display_hal_init_panel()` "succeeds" on a bare board. Current source recovers
+   by requiring FT3168 touch readback and bailing to headless
+   (`main/display_task.c:121`), which lets `main.c:495` call
+   `csi_collector_enable_data_capture()`. If that upgrade does not happen the
+   promiscuous filter stays MGMT-only and **CSI yield collapses to 0 pps** while the
+   node still looks healthy on the network. Build with the
+   `sdkconfig.defaults.devkitc` overlay to compile display support out entirely and
+   make `has_display` a compile-time false.
+
+4. **Serial console is silent on native-USB boards.** Add
+   `CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y` or you get no boot log on COM3/COM4.
+
+5. **Docker Desktop on Windows drops UDP from all but one source IP.** With 6 nodes
+   you lose 5. `--network host` does not help (not implemented for the Linux engine
+   on Windows). Either run `sensing-server` natively, or run
+   `python scripts/udp-relay.py --listen-port 5005 --forward-port 5006` and remap the
+   container to `5006:5005/udp`. Full writeup: `docs/TROUBLESHOOTING.md` §9.
+
+6. **`sensing-server` 404s on the UI** when launched from the wrong cwd — the default
+   `--ui-path ../ui` is cwd-relative. Pass an absolute path.
+
+7. **Only one process can bind UDP :5005.** The standalone aggregator, the
+   calibration CLI, and `sensing-server` all want it. Run one at a time, or use
+   `scripts/csi-udp-relay.py` to fan out to a loopback port.
+
+8. **Windows Firewall blocks inbound LAN UDP** to a freshly-built `.exe`.
+   `python.exe` is usually already allowed — `scripts/csi-udp-relay.py` exists
+   precisely to exploit that, and needs no admin.
+
+9. **`edge_tier` and CSI are not independent.** `calibrate` / `enroll` / `room-watch`
+   need **raw CSI (`--edge-tier 0`)**. Tier 2 gives you the 32-byte vitals packet
+   instead. Provision per experiment.
+
+---
+
+## 7. Examples worth knowing
+
+| Path | Needs hardware? | What it gives you |
+|------|-----------------|-------------------|
+| `scripts/synth-csi-udp.py` | No | Emits real ADR-018 `0xC5110001` frames at 20 Hz. Exercises the whole host pipeline with no ESP32. **Best first test.** |
+| `archive/v1/data/proof/verify.py` | No | Deterministic SHA-256 pipeline proof |
+| `examples/research-sota/` | No | 9 folders of pure-NumPy physics derivations. `02-placement/` is the practical node-siting recipe. |
+| `examples/ruview_live.py` | Yes | Unified live dashboard, CSI + optional mmWave |
+| `examples/through-wall/wiflow_browser.html` | Yes | Self-contained browser capture → train → infer loop |
+| `scripts/record-csi-udp.py` | Yes | Records raw CSI to JSONL for offline replay |
+| `scripts/udp-relay.py` | Yes | The Docker-on-Windows multi-node workaround |
+
+---
+
+## 8. Wire protocols
+
+UDP to the aggregator. First 4 bytes are the magic.
+
+| Magic | Name | Rate | Size |
+|-------|------|------|------|
+| `0xC5110001` | CSI frame (ADR-018) | ~20 Hz | 20-byte header + I/Q pairs |
+| `0xC5110002` | Vitals packet | 1 Hz | 32 bytes |
+| `0xC5110003` | Seed feature vector | 1 Hz | 48 bytes |
+| `0xC5110004` | WASM module output | event | variable |
+
+ADR-018 header: `magic(4) · node_id(1) · n_ant(1) · n_sc(2 LE) · freq_mhz(4 LE) ·
+seq(4 LE) · rssi(i8) · noise(i8) · reserved(2)`, then `n_ant × n_sc × 2` bytes of
+signed I/Q.
+
+---
+
+## 9. Honesty rules
+
+This repo makes a lot of claims and is unusually good about labelling which are
+real. Preserve that. When you touch a claim, keep its evidence tag.
+
+Load-bearing distinctions currently documented in-tree:
+
+- **Firmware presence detection is a variance threshold, not a model.** It
+  false-positives on fans, microwaves, and AP power swings. The firmware README says
+  so explicitly — do not let a doc edit quietly upgrade it.
+- **Firmware `n_persons` is a slot-capacity heuristic** over top-K subcarrier groups
+  (`main/edge_processing.c:481`). It tracks subcarrier diversity, not people.
+- **Without `--model`, the sensing server's on-screen skeleton is driven by signal
+  heuristics**, not learned keypoint inference.
+- **The Hugging Face model ships as JSONL RVF; `--model` only parses binary RVF.**
+  Pointing `--model` at `model.rvf.jsonl` fails with a magic mismatch and the
+  pipeline degrades to null output. Run without `--model` until a JSONL adapter lands.
+- **`examples/research-sota/` numbers are synthetic-physics derivations**, not bench
+  measurements. Real deployments diverge 5–30%.
+- **`ruview-unified` (ADR-273..282) numbers are evidence level L0** — synthetic until
+  real-data validation.
+
+If you produce a new number, state how it was measured and on what.
+
+---
+
+## 10. Working rules
+
+- Do what was asked; nothing more, nothing less.
+- Read a file before editing it.
+- Prefer editing an existing file to creating a new one.
+- Never create `*.md` documentation proactively — only when asked.
+- Never write to the repo root. Use `docs/`, `plans/`, `v2/crates/`, `scripts/`.
+- Keep source files under ~500 lines.
+- Never commit secrets, credentials, or `.env` files.
+- Run tests after code changes; verify the build before committing.
+- Commit or push only when asked. If on `main`, branch first.
+
+### Pre-merge checklist
+
+1. `cd v2 && cargo test --workspace --no-default-features` — 0 failed
+2. `python archive/v1/data/proof/verify.py` — `VERDICT: PASS`
+3. Update `README.md` / this file if scope changed
+4. Add a `CHANGELOG.md` entry under `[Unreleased]`
+5. Update `docs/user-guide.md` if CLI flags, data sources, or setup changed
+6. Regenerate the witness bundle if tests or the proof hash changed:
+   `bash scripts/generate-witness-bundle.sh`
+7. Add new build artifacts to `.gitignore`
+
+---
+
+## 11. Pointers
+
+- **6-node ESP32-S3 bring-up and test plan:** `plans/ruview-esp32s3-test-plan.md`
+  (browsable copy: `plans/ruview-esp32s3-test-plan.html`)
+- **Operator guide:** `docs/user-guide.md`
+- **Field failures + fixes:** `docs/TROUBLESHOOTING.md`
+- **Firmware detail:** `firmware/esp32-csi-node/README.md`
+- **Per-room calibration design:** `docs/adr/ADR-151-*.md`
+- **Multistatic mesh design:** `docs/adr/ADR-029-*.md`, `ADR-032-*.md`
+- **Frame format:** `docs/adr/ADR-018-*.md`

@@ -1,0 +1,1333 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RuView — 6-Node ESP32-S3 Test Plan</title>
+<style>
+:root{
+  --bg:#fbfbfa; --panel:#fff; --ink:#1c1c1a; --muted:#6b6b63; --line:#e4e2dc;
+  --accent:#b34a1a; --accent-soft:#fdf3ee;
+  --ok:#2d6a3e; --ok-soft:#eef6f0; --warn:#8a6100; --warn-soft:#fdf6e6;
+  --err:#a32b2b; --err-soft:#fdefef; --info:#2a5c85; --info-soft:#eef4f9;
+  --code-bg:#f4f2ee; --mono:ui-monospace,"Cascadia Mono","SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#16161a; --panel:#1d1d22; --ink:#e6e4df; --muted:#9a978e; --line:#32323a;
+    --accent:#e8834f; --accent-soft:#2a1d15;
+    --ok:#7cc493; --ok-soft:#17251a; --warn:#e0b054; --warn-soft:#26200f;
+    --err:#e8837f; --err-soft:#2a1717; --info:#7bb0dd; --info-soft:#14202b;
+    --code-bg:#101014;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#fbfbfa; --panel:#fff; --ink:#1c1c1a; --muted:#6b6b63; --line:#e4e2dc;
+  --accent:#b34a1a; --accent-soft:#fdf3ee;
+  --ok:#2d6a3e; --ok-soft:#eef6f0; --warn:#8a6100; --warn-soft:#fdf6e6;
+  --err:#a32b2b; --err-soft:#fdefef; --info:#2a5c85; --info-soft:#eef4f9;
+  --code-bg:#f4f2ee;
+}
+:root[data-theme="dark"]{
+  --bg:#16161a; --panel:#1d1d22; --ink:#e6e4df; --muted:#9a978e; --line:#32323a;
+  --accent:#e8834f; --accent-soft:#2a1d15;
+  --ok:#7cc493; --ok-soft:#17251a; --warn:#e0b054; --warn-soft:#26200f;
+  --err:#e8837f; --err-soft:#2a1717; --info:#7bb0dd; --info-soft:#14202b;
+  --code-bg:#101014;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth; scroll-padding-top:1.5rem}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font:16px/1.65 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Inter,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{display:grid; grid-template-columns:270px minmax(0,1fr); gap:0; max-width:1400px; margin:0 auto}
+/* ── sidebar ── */
+nav{
+  position:sticky; top:0; align-self:start; height:100vh; overflow-y:auto;
+  padding:1.6rem 1rem 3rem 1.4rem; border-right:1px solid var(--line);
+  font-size:.86rem;
+}
+nav .brand{font-weight:700; letter-spacing:-.01em; font-size:1rem; margin-bottom:.15rem}
+nav .sub{color:var(--muted); font-size:.76rem; margin-bottom:1.2rem}
+nav a{display:block; color:var(--muted); text-decoration:none; padding:.28rem .5rem; border-radius:5px; border-left:2px solid transparent}
+nav a:hover{color:var(--ink); background:var(--accent-soft)}
+nav a.on{color:var(--accent); border-left-color:var(--accent); font-weight:600}
+nav .grp{margin-top:.9rem; font-size:.7rem; text-transform:uppercase; letter-spacing:.09em; color:var(--muted); opacity:.7; padding-left:.5rem}
+/* ── main ── */
+main{padding:2.2rem 2.4rem 6rem; min-width:0}
+h1{font-size:2.05rem; line-height:1.15; letter-spacing:-.025em; margin:0 0 .4rem}
+h2{font-size:1.5rem; letter-spacing:-.02em; margin:3rem 0 .5rem; padding-top:1.4rem; border-top:1px solid var(--line)}
+h2:first-of-type{border-top:none; padding-top:0}
+h3{font-size:1.12rem; letter-spacing:-.01em; margin:2rem 0 .5rem}
+h4{font-size:.95rem; margin:1.4rem 0 .4rem; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; font-weight:700}
+p,ul,ol{margin:.65rem 0}
+li{margin:.25rem 0}
+a{color:var(--accent)}
+code{font-family:var(--mono); font-size:.86em; background:var(--code-bg); padding:.12em .38em; border-radius:4px}
+pre{background:var(--code-bg); border:1px solid var(--line); border-radius:8px; padding:.9rem 1rem; overflow-x:auto; position:relative; margin:.7rem 0}
+pre code{background:none; padding:0; font-size:.83rem; line-height:1.55}
+.copy{position:absolute; top:.45rem; right:.45rem; font:600 .68rem/1 var(--mono); color:var(--muted);
+  background:var(--panel); border:1px solid var(--line); border-radius:5px; padding:.32rem .5rem; cursor:pointer; opacity:0; transition:opacity .15s}
+pre:hover .copy{opacity:1}
+.copy:hover{color:var(--accent); border-color:var(--accent)}
+.copy.done{color:var(--ok); border-color:var(--ok)}
+/* ── tables ── */
+.tw{overflow-x:auto; margin:.9rem 0; border:1px solid var(--line); border-radius:8px}
+table{border-collapse:collapse; width:100%; font-size:.88rem}
+th,td{text-align:left; padding:.5rem .75rem; border-bottom:1px solid var(--line); vertical-align:top}
+th{background:var(--code-bg); font-weight:600; font-size:.78rem; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); white-space:nowrap}
+tr:last-child td{border-bottom:none}
+/* ── callouts ── */
+.box{border-left:3px solid var(--line); background:var(--panel); padding:.7rem 1rem; border-radius:0 7px 7px 0; margin:.8rem 0; font-size:.93rem}
+.box .lbl{font:700 .68rem/1 ui-sans-serif,system-ui,sans-serif; text-transform:uppercase; letter-spacing:.09em; display:block; margin-bottom:.4rem}
+.goal{border-color:var(--accent); background:var(--accent-soft)} .goal .lbl{color:var(--accent)}
+.why{border-color:var(--info); background:var(--info-soft)} .why .lbl{color:var(--info)}
+.pass{border-color:var(--ok); background:var(--ok-soft)} .pass .lbl{color:var(--ok)}
+.fail{border-color:var(--err); background:var(--err-soft)} .fail .lbl{color:var(--err)}
+.warn{border-color:var(--warn); background:var(--warn-soft)} .warn .lbl{color:var(--warn)}
+.note{border-color:var(--muted); background:var(--code-bg)} .note .lbl{color:var(--muted)}
+.box p:first-of-type{margin-top:0} .box p:last-child,.box ul:last-child{margin-bottom:0}
+/* ── step cards ── */
+.step{border:1px solid var(--line); border-radius:10px; background:var(--panel); padding:1.1rem 1.3rem; margin:1.2rem 0}
+.step > h3{margin-top:0; display:flex; align-items:flex-start; gap:.6rem}
+.chk{appearance:none; width:1.05rem; height:1.05rem; min-width:1.05rem; margin-top:.28rem; border:2px solid var(--line); border-radius:4px; cursor:pointer; background:var(--bg); position:relative}
+.chk:checked{background:var(--ok); border-color:var(--ok)}
+.chk:checked::after{content:"✓"; position:absolute; inset:0; color:#fff; font:700 .75rem/1.05rem ui-sans-serif,sans-serif; text-align:center}
+.step:has(.chk:checked){opacity:.58}
+.step:has(.chk:checked) > h3{text-decoration:line-through; text-decoration-color:var(--muted)}
+/* ── misc ── */
+.hero{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:1.3rem 1.5rem; margin:1.4rem 0 2rem}
+.pills{display:flex; flex-wrap:wrap; gap:.4rem; margin:.6rem 0 0}
+.pill{font-size:.74rem; font-weight:600; padding:.22rem .6rem; border-radius:20px; background:var(--accent-soft); color:var(--accent); border:1px solid var(--accent)}
+.pill.n{background:var(--code-bg); color:var(--muted); border-color:var(--line)}
+.ascii{font-family:var(--mono); font-size:.78rem; line-height:1.35; white-space:pre; background:var(--code-bg); border:1px solid var(--line); border-radius:8px; padding:1rem; overflow-x:auto; margin:.9rem 0}
+.tt{position:fixed; top:1rem; right:1rem; z-index:20; background:var(--panel); border:1px solid var(--line); border-radius:7px; padding:.42rem .6rem; cursor:pointer; font-size:.95rem; line-height:1; color:var(--muted)}
+.tt:hover{color:var(--accent); border-color:var(--accent)}
+.reset{font:inherit; font-size:.78rem; color:var(--muted); background:none; border:1px solid var(--line); border-radius:5px; padding:.3rem .6rem; cursor:pointer; margin-top:1rem}
+.reset:hover{color:var(--err); border-color:var(--err)}
+.prog{position:sticky; top:0; z-index:10; background:var(--bg); padding:.7rem 0 .5rem; margin-bottom:.5rem; border-bottom:1px solid var(--line)}
+.bar{height:5px; background:var(--line); border-radius:3px; overflow:hidden}
+.bar > i{display:block; height:100%; width:0; background:var(--accent); transition:width .25s}
+.prog .txt{font-size:.75rem; color:var(--muted); margin-bottom:.35rem; display:flex; justify-content:space-between}
+kbd{font-family:var(--mono); font-size:.8em; border:1px solid var(--line); border-bottom-width:2px; border-radius:4px; padding:.05em .35em; background:var(--code-bg)}
+@media (max-width:980px){
+  .wrap{grid-template-columns:1fr}
+  nav{position:static; height:auto; border-right:none; border-bottom:1px solid var(--line); padding:1.2rem}
+  main{padding:1.4rem 1.1rem 4rem}
+  h1{font-size:1.6rem}
+}
+@media print{
+  nav,.tt,.copy,.prog,.reset{display:none}
+  .wrap{grid-template-columns:1fr} main{padding:0}
+  .step{break-inside:avoid} pre{white-space:pre-wrap}
+}
+</style>
+</head>
+<body>
+
+<button class="tt" id="tt" title="Toggle light/dark">◑</button>
+
+<div class="wrap">
+<nav>
+  <div class="brand">RuView Test Plan</div>
+  <div class="sub">6 × ESP32-S3 · Windows 11</div>
+  <div class="grp">No hardware needed</div>
+  <a href="#p0">0 · Concepts</a>
+  <a href="#p1">1 · Host toolchain</a>
+  <a href="#p2">2 · Validate without hardware</a>
+  <div class="grp">Hardware</div>
+  <a href="#p3">3 · Build firmware</a>
+  <a href="#p4">4 · First node alive</a>
+  <a href="#p5">5 · First real CSI</a>
+  <a href="#p6">6 · Vitals</a>
+  <a href="#p7">7 · Calibration &amp; training</a>
+  <div class="grp">Six nodes</div>
+  <a href="#p8">8 · Scale to 6 nodes</a>
+  <a href="#p9">9 · Multistatic &amp; through-wall</a>
+  <a href="#p10">10 · Record &amp; report</a>
+  <div class="grp">Reference</div>
+  <a href="#a">A · Troubleshooting</a>
+  <a href="#b">B · Commands</a>
+  <a href="#c">C · Node log sheet</a>
+  <a href="#d">D · Further reading</a>
+  <button class="reset" id="reset">Reset all checkboxes</button>
+</nav>
+
+<main>
+
+<div class="prog">
+  <div class="txt"><span>Progress</span><span id="pt">0 / 0 steps</span></div>
+  <div class="bar"><i id="pb"></i></div>
+</div>
+
+<h1>RuView — 6-Node ESP32-S3 Test Plan</h1>
+<div class="hero">
+  <p style="margin-top:0"><strong>Target:</strong> 6 × ESP32-S3, 8&nbsp;MB flash, no PSRAM, native USB · Windows 11 host<br>
+  <strong>Written:</strong> 2026-07-27, against repo <code>2cc378c1</code>, firmware <code>v0.8.4</code></p>
+  <div class="pills">
+    <span class="pill">Core CSI + vitals</span>
+    <span class="pill">Per-room calibration &amp; training</span>
+    <span class="pill">Multistatic mesh &amp; through-wall</span>
+    <span class="pill n">Pose — out of scope, not real yet</span>
+    <span class="pill n">WASM Tier 3 — no PSRAM</span>
+  </div>
+</div>
+
+<h3>How to use this document</h3>
+<p>Ten phases. <strong>Phases 0–2 need no hardware</strong> — do them first, because they
+teach you what "correct" looks like before an antenna is involved.</p>
+<p>Tick a step's checkbox when it passes. Progress is saved in this browser, so you can
+close the page and come back. Hover any code block for a copy button.</p>
+<div class="box warn"><span class="lbl">⚠ Do not skip a Pass gate</span>
+Almost every hard-to-debug WiFi-sensing failure is a skipped gate three phases earlier.
+The most common one in this project is <em>"the node is on the network and looks alive,
+but CSI yield is 0&nbsp;pps."</em></div>
+
+<h4>Notation</h4>
+<div class="tw"><table>
+<tr><th>Token</th><th>Means</th></tr>
+<tr><td><code>PS&gt;</code></td><td>PowerShell prompt — the primary shell on your machine</td></tr>
+<tr><td><code>$py</code></td><td><code>C:\Espressif\tools\python\v6.0.2\venv\Scripts\python.exe</code> — the Python that has <code>esptool</code></td></tr>
+<tr><td><code>$repo</code></td><td><code>C:\Users\otaia0a\Desktop\RuView</code></td></tr>
+<tr><td><code>&lt;HOST_IP&gt;</code></td><td>Your laptop's LAN IPv4 (<code>ipconfig</code>). Must share a subnet with the ESP32s.</td></tr>
+</table></div>
+
+<h4>Time budget</h4>
+<div class="tw"><table>
+<tr><th>Phase</th><th>What</th><th>Time</th></tr>
+<tr><td>0</td><td>Concepts</td><td>30 min reading</td></tr>
+<tr><td>1</td><td>Host toolchain</td><td>45–90 min (mostly waiting)</td></tr>
+<tr><td>2</td><td>No-hardware validation</td><td>45 min</td></tr>
+<tr><td>3</td><td>Build firmware</td><td>30–60 min</td></tr>
+<tr><td>4</td><td>First node alive</td><td>45 min</td></tr>
+<tr><td>5</td><td>First real CSI</td><td>30 min</td></tr>
+<tr><td>6</td><td>Vitals</td><td>60 min</td></tr>
+<tr><td>7</td><td>Per-room calibration &amp; training</td><td>90 min</td></tr>
+<tr><td>8</td><td>Scale to 6 nodes</td><td>2–3 h</td></tr>
+<tr><td>9</td><td>Multistatic &amp; through-wall</td><td>3–4 h</td></tr>
+<tr><td>10</td><td>Record, analyse, report</td><td>2 h</td></tr>
+</table></div>
+
+
+<h2 id="p0">Phase 0 — Concepts</h2>
+<p>Read once. This is the vocabulary the rest of the plan uses. No commands.</p>
+
+<h3>0.1 What CSI actually is</h3>
+<p>Your WiFi radio does not receive one signal. An 802.11n 20&nbsp;MHz channel is split into
+<strong>56 subcarriers</strong> — narrow frequency slots transmitted in parallel. To decode a packet
+the receiver must estimate, for each subcarrier, how the channel distorted it. That estimate
+is a complex number: an <strong>amplitude</strong> (attenuation) and a <strong>phase</strong> (delay).</p>
+<p>That per-subcarrier complex vector is <strong>Channel State Information</strong>. Every WiFi chip
+computes it. Almost none let you read it. The ESP32 does.</p>
+<div class="ascii">        transmitted                     received
+   ┌─────────────────┐             ┌─────────────────┐
+   │ ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁ │  ──────►    │ ▁▃▅▂▇▁▄▆▂▁▅▃▁▂▄ │   56 subcarriers
+   └─────────────────┘   the room   └─────────────────┘
+                          changes
+                            it</div>
+<p><strong>Why a human shows up in it.</strong> Radio waves reflect off you — your body is mostly water,
+a strong reflector at 2.4&nbsp;GHz. The received signal is the sum of the direct path plus every
+reflection. Move, or just <em>breathe</em>, and reflected path lengths change by millimetres, which
+changes the phase of that sum. Chest-wall motion during breathing is 4–12&nbsp;mm; the wavelength
+at 2.4&nbsp;GHz is 125&nbsp;mm. A 12&nbsp;mm path change is ~35° of phase — enormous next to the noise floor.</p>
+<div class="box note"><span class="lbl">The key idea</span>
+This is why it works through walls and in the dark. The system is not seeing you. It is
+measuring how you perturb a radio field that already fills the room.</div>
+
+<h3>0.2 What each piece of this repo does</h3>
+<div class="ascii">┌────────────┐   UDP :5005   ┌──────────────────┐   HTTP :3000  ┌─────────┐
+│  ESP32-S3  │ ────────────► │  sensing-server  │ ────────────► │ Browser │
+│   node     │  ADR-018      │  (Rust, host)    │  WebSocket    │   UI    │
+└────────────┘  CSI frames   └──────────────────┘               └─────────┘
+      │                              │
+      │ on-device DSP                │ host DSP
+      │ (tiers 0/1/2)                │ (RuvSense, vitals, fusion)
+      ▼                              ▼
+  32-byte vitals               presence / breathing / heart rate
+  packet @ 1 Hz                motion / falls / multi-person</div>
+<p>The <strong>firmware tiers</strong> are a runtime choice on the node:</p>
+<div class="tw"><table>
+<tr><th>Tier</th><th>Runs on the ESP32</th><th>On the wire</th><th>Use for</th></tr>
+<tr><td><strong>0</strong></td><td>Nothing — raw passthrough</td><td>Full CSI, ~20 Hz, ~5 KB/s</td><td><strong>Calibration, enrollment, training, host DSP</strong></td></tr>
+<tr><td><strong>1</strong></td><td>Phase unwrap, Welford, top-K</td><td>Compressed CSI</td><td>Bandwidth-constrained links</td></tr>
+<tr><td><strong>2</strong></td><td>Full DSP: vitals, presence, fall</td><td>32-byte vitals @ 1 Hz + CSI</td><td><strong>Standalone node</strong></td></tr>
+<tr><td><strong>3</strong></td><td>WASM modules</td><td>Custom events</td><td>❌ <strong>Unavailable on your boards</strong> — needs PSRAM</td></tr>
+</table></div>
+<p>You will switch between tier 0 and tier 2. That is a runtime NVS setting —
+<strong>no reflashing required</strong>.</p>
+
+<h3>0.3 What is real vs. what is a demo</h3>
+<p>This repo is unusually honest about this, and you should hold it to that standard.</p>
+<div class="box pass"><span class="lbl">Solid — expect these to work</span>
+Raw CSI streaming at ~20&nbsp;Hz · breathing rate (0.1–0.5&nbsp;Hz → 6–30&nbsp;BPM) on a still subject ·
+motion / activity · the ADR-151 calibration → enrollment → specialist-bank pipeline ·
+multistatic fusion of several nodes.</div>
+<div class="box warn"><span class="lbl">Weaker — expect noise</span>
+<strong>Heart rate</strong> (0.8–2.0&nbsp;Hz) — much lower SNR; needs a still, close subject.<br>
+<strong>Presence</strong> — the firmware's is a <em>variance threshold, not a model</em>; false-positives on
+fans, microwaves, AP power swings.<br>
+<strong>Person counting</strong> — the firmware's <code>n_persons</code> is a <em>slot-capacity heuristic</em> over
+top-K subcarrier groups (<code>main/edge_processing.c:481</code>). It tracks subcarrier diversity,
+not people. TROUBLESHOOTING §2 documents it reading 6–8 for 5 bodies.</div>
+<div class="box fail"><span class="lbl">Not real yet — don't spend time here</span>
+<strong>17-keypoint pose from CSI alone.</strong> The committed on-device model scores PCK@20 = 3.0%
+against a ≥35% target, and its runtime path is a <code>confidence=0</code> stub. Without
+<code>--model</code>, the on-screen skeleton is driven by amplitude-variance heuristics. The
+82.69% MM-Fi figure is a <em>separate published benchmark on a research dataset</em>, not this path.<br><br>
+<strong>Loading the Hugging Face weights.</strong> The HF bundle is JSONL RVF; <code>--model</code> only
+parses binary RVF. It errors on magic mismatch and degrades to null output. Run <strong>without</strong>
+<code>--model</code>.<br><br>
+<strong>Tier 3 WASM.</strong> No PSRAM on your boards.</div>
+
+<h3>0.4 Your specific hardware</h3>
+<p>Read from the chips' eFuses, not guessed from a datasheet:</p>
+<pre><code>Chip           ESP32-S3 (QFN56) rev v0.1
+Flash          8 MB, in-package, GigaDevice
+PSRAM          None    (PSRAM_CAP = None, PSRAM_CAPACITY = 0)
+USB            USB-Serial/JTAG, native      (VID 303A / PID 1001)
+MACs seen      f4:12:fa:9d:b6:a4 (COM3)
+               f4:12:fa:9d:b6:d4 (COM4)</code></pre>
+<p>Three consequences, all of which will bite you if ignored:</p>
+<ol>
+<li><strong>No PSRAM</strong> → Tier 3 WASM is out, and the AMOLED display code has no framebuffer
+memory. You will compile both out.</li>
+<li><strong>Native USB only</strong> → the default ESP-IDF console goes to UART0, which is not wired to
+this USB port. Without a config change your serial monitor is <strong>silent</strong>, and you will
+misdiagnose a working board as dead.</li>
+<li><strong>Display probe false-positive</strong> → the SH8601 panel driver is write-only, so its init
+"succeeds" on a board with no panel. When the firmware thinks it has a display it keeps the
+promiscuous filter at MGMT-only, and <strong>CSI yield collapses to 0&nbsp;pps</strong> while the node still
+associates, still pings, and looks perfectly healthy. This is the nastiest failure mode in
+the project. You will compile display support out to make it impossible.</li>
+</ol>
+
+
+<h2 id="p1">Phase 1 — Host toolchain</h2>
+<div class="box goal"><span class="lbl">Goal</span>A machine that can build the firmware, build the Rust server, and flash a board.</div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s1.1"><label for="s1.1">Step 1.1 — Inventory what you already have</label></h3>
+<pre><code>PS&gt; $py = 'C:\Espressif\tools\python\v6.0.2\venv\Scripts\python.exe'
+PS&gt; &amp; $py --version
+PS&gt; &amp; $py -m esptool version
+PS&gt; python --version
+PS&gt; git --version
+PS&gt; cargo --version
+PS&gt; docker version --format '{{.Server.Version}}'</code></pre>
+<h4>Expect (from the scan of your machine)</h4>
+<div class="tw"><table>
+<tr><th>Tool</th><th>State</th><th>Action</th></tr>
+<tr><td>ESP-IDF venv Python 3.11 + esptool 5.3.1</td><td>✅ present</td><td>none</td></tr>
+<tr><td>Base Python 3.11.15 + numpy/scipy/pyserial</td><td>✅ present</td><td>none</td></tr>
+<tr><td>Git</td><td>✅ present</td><td>none</td></tr>
+<tr><td><strong>Rust / cargo</strong></td><td>❌ absent</td><td><strong>Step 1.3</strong></td></tr>
+<tr><td><strong>Docker daemon</strong></td><td>❌ not running</td><td>optional — Step 1.5</td></tr>
+<tr><td>ESP-IDF <strong>v6.0.2</strong> at <code>C:\esp\v6.0.2\esp-idf</code></td><td>⚠️ wrong version</td><td>firmware needs <strong>v5.4</strong> — Step 1.4</td></tr>
+</table></div></div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s1.2"><label for="s1.2">Step 1.2 — Initialise git submodules</label></h3>
+<div class="box goal"><span class="lbl">Goal</span>Make the Rust workspace buildable.</div>
+<div class="box why"><span class="lbl">Why</span><code>v2/crates/ruv-neural</code>, <code>ruview-swarm</code> and
+<code>worldgraph</code> are declared workspace members but their directories are <strong>empty</strong>.
+Cargo refuses to parse the workspace at all. 100% reproducible, not a maybe.</div>
+<pre><code>PS&gt; cd $repo
+PS&gt; git submodule update --init --recursive</code></pre>
+<div class="box pass"><span class="lbl">✅ Pass</span><code>git submodule status</code> shows no leading <code>-</code> on any line.</div>
+<div class="box fail"><span class="lbl">❌ Fail</span>A leading <code>-</code> remains → that submodule did not clone.
+Retry individually: <code>git submodule update --init v2/crates/worldgraph</code></div></div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s1.3"><label for="s1.3">Step 1.3 — Install Rust</label></h3>
+<div class="box why"><span class="lbl">Why</span>The sensing server, the calibration CLI, and the whole
+multistatic path are Rust. The workspace pins <strong>Rust 1.89</strong> in <code>v2/rust-toolchain.toml</code>;
+rustup fetches it automatically on first build.</div>
+<h4>(a) MSVC build tools — the linker</h4>
+<p>Skip only if you already have Visual Studio with the C++ workload.</p>
+<pre><code>PS&gt; winget install --id Microsoft.VisualStudio.2022.BuildTools `
+      --override "--quiet --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"</code></pre>
+<h4>(b) Rust</h4>
+<pre><code>PS&gt; winget install --id Rustlang.Rustup
+# close and reopen PowerShell so PATH updates
+PS&gt; rustup default stable
+PS&gt; cargo --version</code></pre>
+<div class="box pass"><span class="lbl">✅ Pass</span><code>cargo --version</code> prints a version.</div>
+<div class="box fail"><span class="lbl">❌ Fail — <code>link.exe not found</code></span>The C++ workload did not install.
+Open "Visual Studio Installer" → Modify → check <strong>Desktop development with C++</strong>.</div></div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s1.4"><label for="s1.4">Step 1.4 — ESP-IDF v5.4 (only if building firmware natively)</label></h3>
+<div class="box why"><span class="lbl">Why</span>The firmware targets v5.4. You have v6.0.2. ESP-IDF major
+versions carry breaking API changes and this firmware is not known to build on v6.</div>
+<div class="tw"><table>
+<tr><th>Route</th><th>Needs</th><th>Notes</th></tr>
+<tr><td><strong>A — Docker</strong></td><td>Docker daemon running</td><td>What the repo documents. Zero IDF setup. → Step 1.5</td></tr>
+<tr><td><strong>B — native v5.4</strong></td><td>~2 GB disk, 30 min</td><td>No Docker needed. Works today.</td></tr>
+</table></div>
+<h4>Route B — install v5.4 side by side</h4>
+<p>Run the ESP-IDF Windows installer (<code>esp-idf-tools-setup-*.exe</code>) and choose version
+<strong>v5.4</strong>, install path <code>C:\esp\v5.4</code>. It coexists with v6.0.2 — separate directories,
+separate tool sets. Then export it per shell session:</p>
+<pre><code>PS&gt; $env:IDF_PATH       = 'C:\esp\v5.4\esp-idf'
+PS&gt; $env:IDF_TOOLS_PATH = 'C:\Espressif\tools'
+PS&gt; &amp; 'C:\esp\v5.4\esp-idf\export.ps1'
+PS&gt; idf.py --version</code></pre>
+<div class="box note"><span class="lbl">On the repo's "Docker is the only reliable method" warning</span>
+That warning is specifically about <strong>Git Bash / MSYS2</strong>, where <code>idf.py</code> detects the
+<code>MSYSTEM</code> environment variable and silently skips <code>main()</code> — the build appears to do
+nothing. <strong>PowerShell is unaffected.</strong> Build from PowerShell, not Git Bash.</div>
+<div class="box pass"><span class="lbl">✅ Pass</span><code>idf.py --version</code> reports 5.4.</div>
+<div class="box fail"><span class="lbl">❌ Fail — command not found</span><code>export.ps1</code> only affects the
+current session. Re-run it in every new terminal.</div></div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s1.5"><label for="s1.5">Step 1.5 — Docker (optional, for tomorrow)</label></h3>
+<p>Starting Docker Desktop later gains you the containerised firmware build and the prebuilt
+<code>ruvnet/wifi-densepose</code> server image. Confirm with <code>docker ps</code>.</p>
+<div class="box warn"><span class="lbl">⚠ Read this before using Docker with more than one node</span>
+Docker Desktop on Windows runs the engine inside a WSL2/Hyper-V VM. Inbound UDP from multiple
+source IPs is demultiplexed onto a single virtual socket — <strong>the first source IP wins and every
+other node is silently dropped.</strong> With 6 nodes you would see 1. <code>--network host</code> does not
+help (not implemented for the Linux engine on Windows).
+<pre><code>PS&gt; python scripts\udp-relay.py --listen-port 5005 --forward-port 5006
+# then in docker/docker-compose.yml change  "5005:5005/udp"  →  "5006:5005/udp"</code></pre>
+Full detail: <code>docs/TROUBLESHOOTING.md</code> §9. <strong>Running <code>sensing-server</code> natively avoids
+this entirely</strong> — which is why this plan builds it natively.</div></div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s1.6"><label for="s1.6">Step 1.6 — Build the Rust binaries</label></h3>
+<pre><code>PS&gt; cd $repo\v2
+PS&gt; cargo build --release -p wifi-densepose-sensing-server
+PS&gt; cargo build --release -p wifi-densepose-cli --no-default-features</code></pre>
+<div class="box why"><span class="lbl">Why <code>--no-default-features</code> on the CLI</span>
+It drops the <code>mat</code> feature, which otherwise pulls <code>wifi-densepose-nn</code> →
+<code>ort</code> (ONNX Runtime) → <code>openssl-sys</code>. None of that is needed for calibration, and
+<code>openssl-sys</code> is a notorious Windows build failure.</div>
+<p>First build takes 10–20 minutes (~400 crates). Produces
+<code>target\release\sensing-server.exe</code> and <code>target\release\wifi-densepose.exe</code>.</p>
+<div class="box pass"><span class="lbl">✅ Pass</span>
+<code>.\target\release\wifi-densepose.exe version</code> and
+<code>.\target\release\sensing-server.exe --help</code> both print output.</div>
+<div class="box fail"><span class="lbl">❌ Fail — <code>ndarray-linalg</code> / OpenBLAS / vcpkg errors</span>
+Add <code>--no-default-features</code> to the sensing-server build too (issues #366, #415).</div>
+<div class="box fail"><span class="lbl">❌ Fail — "failed to load manifest for workspace member"</span>
+Step 1.2 did not complete. Initialise submodules.</div></div>
+
+
+<h2 id="p2">Phase 2 — Validate with no hardware</h2>
+<div class="box goal"><span class="lbl">Goal</span>Prove the host pipeline is correct <em>before</em> introducing an antenna.</div>
+<div class="box why"><span class="lbl">Why</span>When Phase 5 gives you a weird number, you need to already
+know whether the host math is trustworthy. This phase establishes that.</div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s2.1"><label for="s2.1">Step 2.1 — The deterministic proof ("Trust Kill Switch")</label></h3>
+<pre><code>PS&gt; cd $repo
+PS&gt; python archive\v1\data\proof\verify.py</code></pre>
+<p>Feeds 1,000 synthetic CSI frames (seed=42) through the production pipeline and SHA-256s the
+feature output against a committed hash.</p>
+<div class="box pass"><span class="lbl">✅ Pass</span><code>VERDICT: PASS</code></div>
+<div class="box fail"><span class="lbl">❌ Fail — hash mismatch</span>Usually a numpy/scipy version difference,
+not a bug. Regenerate and re-verify:
+<pre><code>PS&gt; python archive\v1\data\proof\verify.py --generate-hash
+PS&gt; python archive\v1\data\proof\verify.py</code></pre>
+If it fails again with the fresh hash, something is genuinely wrong — stop and investigate.</div></div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s2.2"><label for="s2.2">Step 2.2 — Rust test suite</label></h3>
+<pre><code>PS&gt; cd $repo\v2
+PS&gt; cargo test --workspace --no-default-features</code></pre>
+<p>Expect ~2 minutes, 1,400+ tests, <strong>0 failed</strong>.</p>
+<div class="box pass"><span class="lbl">✅ Pass</span><code>test result: ok</code>, 0 failures.</div>
+<div class="box fail"><span class="lbl">❌ Fail</span>Note which crate. A submodule crate
+(<code>ruview-swarm</code>, <code>worldgraph</code>) blocks nothing here — proceed but write it down.
+<code>wifi-densepose-signal</code>, <code>-calibration</code> or <code>-sensing-server</code> is on your
+critical path — <strong>stop</strong>.</div></div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s2.3"><label for="s2.3">Step 2.3 — Fake an ESP32 and run the whole pipeline</label></h3>
+<div class="box goal"><span class="lbl">Goal</span>Watch real CSI frames flow into the real server, with no hardware.</div>
+<div class="box why"><span class="lbl">Why</span>The highest-value 10 minutes in this plan. It teaches you what
+a healthy <code>/api/v1/sensing/latest</code> looks like, so in Phase 5 you can tell "the ESP32 isn't
+sending" from "the server isn't parsing".</div>
+<p><code>scripts/synth-csi-udp.py</code> emits <strong>genuine ADR-018 <code>0xC5110001</code> frames</strong> — same header,
+same I/Q encoding, 20&nbsp;Hz, 52 subcarriers, <code>node_id=42</code>. The server cannot tell it from a real node.</p>
+<h4>Terminal 1 — the server</h4>
+<pre><code>PS&gt; cd $repo\v2
+PS&gt; .\target\release\sensing-server.exe `
+      --source esp32 --udp-port 5005 --http-port 3000 --ws-port 3001 `
+      --ui-path C:\Users\otaia0a\Desktop\RuView\ui</code></pre>
+<div class="box warn"><span class="lbl">⚠ Always pass an absolute <code>--ui-path</code></span>
+The default <code>../ui</code> resolves against your <em>current working directory</em>, not the binary
+location, so the UI 404s from anywhere else (TROUBLESHOOTING §10).</div>
+<h4>Terminal 2 — the fake node</h4>
+<pre><code>PS&gt; cd $repo
+PS&gt; python scripts\synth-csi-udp.py --host 127.0.0.1 --port 5005 `
+      --duration-s 120 --rate-hz 20 --motion-after-s 30</code></pre>
+<p><code>--motion-after-s 30</code> injects amplitude jitter after 30&nbsp;s — a synthetic "person walks in".
+Watch the server react.</p>
+<h4>Terminal 3 — poke the API</h4>
+<pre><code>PS&gt; curl.exe http://localhost:3000/health
+PS&gt; curl.exe http://localhost:3000/api/v1/sensing/latest
+PS&gt; curl.exe http://localhost:3000/api/v1/nodes
+PS&gt; curl.exe http://localhost:3000/api/v1/vital-signs</code></pre>
+<p>Then open <code>http://localhost:3000/ui/index.html</code> and
+<code>http://localhost:3000/ui/observatory.html</code>.</p>
+<div class="box pass"><span class="lbl">✅ Pass</span>Node 42 appears in <code>/api/v1/nodes</code>, amplitude arrays
+are non-empty and <em>changing between polls</em>, and the motion injection is visible.</div>
+<div class="box fail"><span class="lbl">❌ Fail — node list empty</span>Windows Firewall. Loopback is normally
+exempt; if prompted, allow <code>sensing-server.exe</code> on <strong>Private</strong> networks.</div>
+<div class="box note"><span class="lbl">📌 Save this</span>Write down what a healthy
+<code>/api/v1/sensing/latest</code> looks like. Save the JSON. You will diff against it in Phase 5.</div></div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s2.4"><label for="s2.4">Step 2.4 — Physics groundwork for node placement</label></h3>
+<div class="box goal"><span class="lbl">Goal</span>Decide <em>where</em> to put 6 nodes, from physics rather than vibes.</div>
+<div class="box why"><span class="lbl">Why</span>Placement dominates results. The repo's own study measured a
+<strong>93× sensing-coverage difference</strong> between naive and physics-aware placement. Six nodes badly
+placed will underperform two nodes well placed.</div>
+<pre><code>PS&gt; cd $repo
+PS&gt; python examples\research-sota\01-physics-floor\r6_fresnel_zone.py
+PS&gt; python examples\research-sota\02-placement\r6_2_2_multistatic_placement.py
+PS&gt; python examples\research-sota\02-placement\r6_2_5_multi_subject.py
+PS&gt; python examples\research-sota\02-placement\r6_2_3_chest_centric.py</code></pre>
+<p>Each is pure NumPy, runs in seconds, prints headline numbers, writes <code>*_results.json</code> beside itself.</p>
+<div class="tw"><table>
+<tr><th>Finding</th><th>Meaning for your layout</th></tr>
+<tr><td>93× coverage lift from physics-aware placement</td><td>Placement &gt; node count</td></tr>
+<tr><td>100% coverage of a 1–4 occupant household at <strong>N=5 anchors</strong></td><td><strong>6 nodes is right.</strong> You are at the plateau.</td></tr>
+<tr><td>Chest-centric geometry matters</td><td>Mount at <strong>chest height (~1.0–1.2 m)</strong>, not floor or ceiling</td></tr>
+<tr><td>~50% breathing-band SNR cost from body multi-scatterer</td><td>Expect real breathing SNR ≈ half the idealised model</td></tr>
+</table></div>
+<div class="box warn"><span class="lbl">⚠ Honest framing</span>These are synthetic-physics derivations, not bench
+measurements. <code>examples/research-sota/README.md</code> says real deployments diverge <strong>5–30%</strong>.
+Use them to choose a layout, not to predict your accuracy.</div>
+<div class="box note"><span class="lbl">Deliverable</span>Sketch your test room. Mark 6 node positions and the
+intended subject position. Keep it — Phase 9 turns it into a geometry JSON file.</div></div>
+
+
+<h2 id="p3">Phase 3 — Build the firmware</h2>
+<div class="box goal"><span class="lbl">Goal</span>An <code>esp32-csi-node.bin</code> correct for a display-less,
+PSRAM-less, native-USB ESP32-S3.</div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s3.1"><label for="s3.1">Step 3.1 — Understand why you are not using the prebuilt binaries</label></h3>
+<p><code>firmware/esp32-csi-node/release_bins/</code> contains ready-to-flash binaries.
+<strong>Do not use them.</strong> The evidence:</p>
+<div class="tw"><table>
+<tr><th>Fact</th><th>Source</th></tr>
+<tr><td><code>release_bins</code> are v0.6.7, committed <strong>2026-06-02</strong></td><td><code>git log -- firmware/esp32-csi-node/release_bins/</code></td></tr>
+<tr><td>The display false-positive fix landed <strong>2026-06-17</strong></td><td>commit <code>65e29ef4</code>, issue #1000</td></tr>
+<tr><td>Current firmware source is <strong>v0.8.4</strong></td><td><code>firmware/esp32-csi-node/version.txt</code></td></tr>
+</table></div>
+<div class="box fail"><span class="lbl">The problem</span>The prebuilt binaries <strong>predate the fix for exactly
+the failure mode your boards are vulnerable to.</strong> Building from source costs 20 minutes and removes
+the risk.</div></div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s3.2"><label for="s3.2">Step 3.2 — Create the board overlay</label></h3>
+<div class="tw"><table>
+<tr><th>Setting</th><th>Reason</th></tr>
+<tr><td><code># CONFIG_DISPLAY_ENABLE is not set</code></td><td>Makes <code>has_display</code> a <strong>compile-time</strong> false, so <code>main.c:495</code> always calls <code>csi_collector_enable_data_capture()</code>. This is the 0 pps insurance.</td></tr>
+<tr><td><code># CONFIG_WASM_ENABLE is not set</code></td><td>No PSRAM for the 4 × 160 KB arenas; <code>components/wasm3/wasm3-src/</code> is also absent. Saves ~120 KB flash.</td></tr>
+<tr><td><code>CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y</code></td><td>Your only USB port is native USB-JTAG. Without this the boot log goes to UART0 pins and you see <strong>nothing</strong>.</td></tr>
+</table></div>
+<pre><code>PS&gt; cd $repo\firmware\esp32-csi-node
+PS&gt; @'
+# Overlay for ESP32-S3FN8 boards: 8 MB flash, NO PSRAM, native USB only.
+# Layer on top of sdkconfig.defaults.
+
+# No AMOLED panel. The SH8601 driver is write-only so its probe false-positives
+# on a bare board; when the firmware believes it has a display it keeps the
+# promiscuous filter at MGMT-only and CSI yield collapses to 0 pps (#893/#1000).
+# CONFIG_DISPLAY_ENABLE is not set
+
+# Tier 3 WASM needs 4 x 160 KB PSRAM arenas. These chips report PSRAM_CAP=None.
+# CONFIG_WASM_ENABLE is not set
+
+# Console over the native USB-Serial/JTAG peripheral, not UART0 pins.
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+'@ | Set-Content -Encoding utf8 sdkconfig.defaults.s3fn8</code></pre>
+<div class="box pass"><span class="lbl">✅ Pass</span><code>Get-Content sdkconfig.defaults.s3fn8</code> shows the four settings.</div></div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s3.3"><label for="s3.3">Step 3.3 — Build</label></h3>
+<h4>Route A — native PowerShell (no Docker)</h4>
+<pre><code>PS&gt; cd $repo\firmware\esp32-csi-node
+PS&gt; $env:IDF_PATH = 'C:\esp\v5.4\esp-idf'
+PS&gt; &amp; 'C:\esp\v5.4\esp-idf\export.ps1'
+PS&gt; Remove-Item -Recurse -Force build,sdkconfig -ErrorAction SilentlyContinue
+PS&gt; idf.py -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.s3fn8" set-target esp32s3
+PS&gt; idf.py -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.s3fn8" build</code></pre>
+<h4>Route B — Docker (when the daemon is up)</h4>
+<pre><code>$ MSYS_NO_PATHCONV=1 docker run --rm \
+    -v "$(pwd)/firmware/esp32-csi-node:/project" -w /project \
+    espressif/idf:v5.4 bash -c \
+    "rm -rf build sdkconfig && \
+     idf.py -DSDKCONFIG_DEFAULTS='sdkconfig.defaults;sdkconfig.defaults.s3fn8' set-target esp32s3 && \
+     idf.py -DSDKCONFIG_DEFAULTS='sdkconfig.defaults;sdkconfig.defaults.s3fn8' build"</code></pre>
+<p>Expect 3–10 minutes, ending with a binary-size summary. Artifacts:
+<code>build\bootloader\bootloader.bin</code>, <code>build\partition_table\partition-table.bin</code>,
+<code>build\ota_data_initial.bin</code>, <code>build\esp32-csi-node.bin</code> (~820 KB).</p>
+<div class="box pass"><span class="lbl">✅ Pass</span>All four files exist; app size well under the 2 MB <code>ota_0</code> partition.</div>
+<div class="box fail"><span class="lbl">❌ Fail — <code>idf.py</code> does nothing, no output</span>
+You are in Git Bash. <code>idf.py</code> detects <code>MSYSTEM</code> and skips <code>main()</code>. Use PowerShell.</div>
+<div class="box fail"><span class="lbl">❌ Fail — CMake errors about <code>wasm3-src</code></span>
+WASM did not get disabled. The <code>-DSDKCONFIG_DEFAULTS</code> string must be passed to <strong>both</strong>
+<code>set-target</code> and <code>build</code>.</div>
+<div class="box fail"><span class="lbl">❌ Fail — IDF version errors</span>You exported v6.0.2. Re-check <code>$env:IDF_PATH</code>.</div></div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s3.4"><label for="s3.4">Step 3.4 — Archive this build</label></h3>
+<div class="box why"><span class="lbl">Why</span>You need six identical nodes. Rebuilding per node risks drift.</div>
+<pre><code>PS&gt; mkdir $repo\..\ruview-testbuild -Force
+PS&gt; Copy-Item build\bootloader\bootloader.bin,`
+              build\partition_table\partition-table.bin,`
+              build\ota_data_initial.bin,`
+              build\esp32-csi-node.bin `
+              $repo\..\ruview-testbuild\
+PS&gt; Get-FileHash $repo\..\ruview-testbuild\*.bin | Format-Table Hash,Path</code></pre>
+<p>Record those hashes in your log. Every node gets these exact bytes.</p></div>
+
+
+<h2 id="p4">Phase 4 — First node alive</h2>
+<div class="box goal"><span class="lbl">Goal</span>One board flashed, on WiFi, and talking. Do <strong>one</strong> node
+completely before touching the other five.</div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s4.1"><label for="s4.1">Step 4.1 — Flash</label></h3>
+<pre><code>PS&gt; $py = 'C:\Espressif\tools\python\v6.0.2\venv\Scripts\python.exe'
+PS&gt; cd $repo\firmware\esp32-csi-node
+PS&gt; &amp; $py -m esptool --chip esp32s3 --port COM3 --baud 460800 `
+      write_flash --flash_mode dio --flash_size 8MB `
+      0x0     build\bootloader\bootloader.bin `
+      0x8000  build\partition_table\partition-table.bin `
+      0xf000  build\ota_data_initial.bin `
+      0x20000 build\esp32-csi-node.bin</code></pre>
+<h4>Offsets are not negotiable — they match <code>partitions_display.csv</code></h4>
+<pre><code>0x0       bootloader
+0x8000    partition table
+0x9000    nvs          ← provision.py writes here
+0xf000    otadata
+0x11000   phy_init
+0x20000   ota_0  (app, 2 MB)
+0x220000  ota_1  (app, 2 MB)
+0x420000  spiffs</code></pre>
+<div class="box pass"><span class="lbl">✅ Pass</span><code>Hash of data verified.</code> for all four writes.</div>
+<div class="box fail"><span class="lbl">❌ Fail — port busy</span>Close every serial monitor. Only one process can hold a COM port.</div>
+<div class="box fail"><span class="lbl">❌ Fail — <code>Failed to connect</code></span>Hold <kbd>BOOT</kbd>, tap
+<kbd>RESET</kbd>, release BOOT, retry. Native-USB boards sometimes need manual bootloader entry.</div></div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s4.2"><label for="s4.2">Step 4.2 — Confirm it boots</label></h3>
+<pre><code>PS&gt; &amp; $py -m serial.tools.miniterm COM3 115200</code></pre>
+<p>Press RESET. Expect roughly:</p>
+<pre><code>I (396) csi_collector: Early capture node_id=1 (before WiFi init)
+I (406) main: ESP32-S3 CSI Node (ADR-018) — v0.8.4 — Node ID: 1
+I (566) main: WiFi STA initialized, connecting to SSID: wifi-densepose</code></pre>
+<p>It will fail to connect — you have not provisioned credentials yet. That is fine.
+<strong>What you are testing is that the console speaks at all.</strong></p>
+<div class="box pass"><span class="lbl">✅ Pass</span>You see boot text.</div>
+<div class="box fail"><span class="lbl">❌ Fail — completely silent</span>The native-USB console problem. Confirm
+the setting made it into the build:
+<pre><code>PS&gt; Select-String -Path build\config\sdkconfig.h -Pattern "USB_SERIAL_JTAG"</code></pre>
+If absent, the overlay was not applied — return to Step 3.3.</div>
+<p>Exit miniterm with <kbd>Ctrl</kbd>+<kbd>]</kbd>.</p></div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s4.3"><label for="s4.3">Step 4.3 — Provision</label></h3>
+<div class="box goal"><span class="lbl">Goal</span>Give the node WiFi credentials, an identity, and a destination.</div>
+<p>Settings go into the <strong>NVS partition at 0x9000</strong> and override the compiled-in Kconfig defaults.
+<strong>Changing them never requires reflashing the app.</strong></p>
+<pre><code>PS&gt; ipconfig | Select-String -Pattern "IPv4"      # get your host IP first
+
+PS&gt; cd $repo
+PS&gt; &amp; $py firmware\esp32-csi-node\provision.py --port COM3 `
+      --ssid "YourWiFi" --password "YourPassword" `
+      --target-ip 192.168.1.20 --target-port 5005 `
+      --node-id 1 --edge-tier 0</code></pre>
+<div class="box why"><span class="lbl">Why <code>--edge-tier 0</code></span>Phases 5 and 7 need <strong>raw CSI</strong>.
+Tier 2 replaces some of it with the compact 32-byte vitals packet. You switch to tier 2 in Phase 6
+and back — a one-command change.</div>
+<div class="tw"><table>
+<tr><th>NVS key</th><th>Flag</th><th>Meaning</th></tr>
+<tr><td><code>ssid</code> / <code>password</code></td><td><code>--ssid</code> / <code>--password</code></td><td>WiFi credentials</td></tr>
+<tr><td><code>target_ip</code> / <code>target_port</code></td><td><code>--target-ip</code> / <code>--target-port</code></td><td>Where CSI goes</td></tr>
+<tr><td><code>node_id</code></td><td><code>--node-id</code></td><td>0–255, <strong>unique per node</strong></td></tr>
+<tr><td><code>edge_tier</code></td><td><code>--edge-tier</code></td><td>0 = raw, 1 = DSP, 2 = vitals</td></tr>
+<tr><td><code>tdm_slot</code> / <code>tdm_nodes</code></td><td><code>--tdm-slot</code> / <code>--tdm-total</code></td><td>Mesh scheduling (Phase 8)</td></tr>
+<tr><td><code>chan_list</code> / <code>dwell_ms</code></td><td><code>--hop-channels</code> / <code>--hop-dwell</code></td><td>Channel hopping</td></tr>
+</table></div>
+<div class="box pass"><span class="lbl">✅ Pass</span><code>NVS provisioning complete!</code></div>
+<div class="box fail"><span class="lbl">❌ Fail — "NVS partition generator not available"</span>
+Export ESP-IDF first (so <code>IDF_PATH</code> is set and the bundled generator is found), or
+<code>&amp; $py -m pip install esp-idf-nvs-partition-gen</code>.</div></div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s4.4"><label for="s4.4">Step 4.4 — Confirm it joins the network</label></h3>
+<p>Reopen the serial monitor and press RESET.</p>
+<pre><code>I (1023) main: Connected to WiFi
+I (1025) main: CSI streaming active → 192.168.1.20:5005 (edge_tier=0, OTA=ready, WASM=off, ...)</code></pre>
+<p><code>WASM=off</code> is correct and expected — you compiled it out.</p>
+<div class="box pass"><span class="lbl">✅ Pass</span>"Connected to WiFi" and a "CSI streaming active" line naming your host IP.</div>
+<div class="box fail"><span class="lbl">❌ Fail — association loops</span>5&nbsp;GHz-only SSID.
+<strong>ESP32-S3 is 2.4&nbsp;GHz only.</strong> Use a 2.4&nbsp;GHz SSID.</div>
+<div class="box fail"><span class="lbl">❌ Fail — connects, then nothing</span>Known post-flash limp state
+(TROUBLESHOOTING §1). Power-cycle: unplug USB, wait 2&nbsp;s, replug.</div></div>
+
+
+<h2 id="p5">Phase 5 — First real CSI</h2>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s5.1"><label for="s5.1">Step 5.1 — Watch the raw wire</label></h3>
+<div class="box why"><span class="lbl">Why</span>This splits "the node isn't sending" from "the server can't
+parse" — the two failures look identical from the UI.</div>
+<pre><code>PS&gt; cd $repo
+PS&gt; python scripts\record-csi-udp.py --duration 30 --output data\recordings</code></pre>
+<div class="box pass"><span class="lbl">✅ Pass</span>≥ 500 packets in 30 s (≈17 pps or better).</div>
+<div class="box fail"><span class="lbl">❌ Fail — zero packets</span>
+<strong>1. Firewall</strong> (most likely). Allow <code>python.exe</code> inbound on Private networks.<br>
+<strong>2. Wrong <code>target_ip</code>.</strong> Check without flashing:
+<code>&amp; $py firmware\esp32-csi-node\provision.py --port COM3 --state</code><br>
+<strong>3. Client/AP isolation</strong> on your router blocks station-to-station traffic. Disable it, or
+test on a phone hotspot.</div>
+<div class="box fail"><span class="lbl">❌ Fail — packets arrive at ~0–2 pps</span>
+⚠️ <strong>This is the display-probe starvation.</strong> Verify:
+<pre><code>PS&gt; Select-String -Path build\config\sdkconfig.h -Pattern "DISPLAY_ENABLE"</code></pre>
+Expect <strong>no</strong> <code>#define CONFIG_DISPLAY_ENABLE 1</code>. If present, rebuild with the overlay (Step 3.3).</div>
+<div class="box note"><span class="lbl">Also worth knowing</span>CSI frames only generate when there is WiFi
+<em>traffic</em> to measure. A totally idle network yields few frames. If the rate is low but non-zero,
+generate traffic — start a large download, or ping the AP in a loop.</div></div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s5.2"><label for="s5.2">Step 5.2 — Feed it to the server</label></h3>
+<pre><code>PS&gt; cd $repo\v2
+PS&gt; .\target\release\sensing-server.exe `
+      --source esp32 --udp-port 5005 --http-port 3000 --ws-port 3001 `
+      --bind-addr 0.0.0.0 `
+      --ui-path C:\Users\otaia0a\Desktop\RuView\ui</code></pre>
+<p><code>--bind-addr 0.0.0.0</code> lets the server accept UDP from the LAN, not just loopback.</p>
+<pre><code>PS&gt; curl.exe http://localhost:3000/api/v1/nodes
+PS&gt; curl.exe http://localhost:3000/api/v1/sensing/latest
+PS&gt; curl.exe http://localhost:3000/health</code></pre>
+<div class="box pass"><span class="lbl">✅ Pass</span>Node 1 present, amplitude arrays populated and changing between polls.</div>
+<div class="box fail"><span class="lbl">❌ Fail — node absent but Step 5.1 saw packets</span>
+Something else holds UDP 5005. Only one process can bind it — stop <code>record-csi-udp.py</code>.
+Check with <code>Get-NetUDPEndpoint -LocalPort 5005</code>.</div></div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s5.3"><label for="s5.3">Step 5.3 — See yourself in the data</label></h3>
+<div class="box goal"><span class="lbl">Goal</span>The first genuinely convincing moment.</div>
+<p>Open <code>http://localhost:3000/ui/observatory.html</code>, then in order:</p>
+<ol>
+<li>Leave the room. Watch for <strong>60 s</strong>. Note the baseline amplitude variance.</li>
+<li>Walk back in. Watch the amplitude heatmap.</li>
+<li>Stand still 2 m from the node for 60 s.</li>
+<li>Wave one arm slowly.</li>
+<li>Leave again.</li>
+</ol>
+<div class="box pass"><span class="lbl">✅ Pass</span>Empty vs occupied is distinguishable <strong>by eye</strong>, without squinting.</div>
+<div class="box fail"><span class="lbl">❌ Fail — no visible difference</span>Move the node. Line of sight to where
+you stand, roughly chest height, ≥ 1 m from large metal, not tucked behind a monitor. Placement is the
+usual culprit — that is why you ran Step 2.4.</div>
+<div class="box note"><span class="lbl">📌 Log this</span>Empty-room variance and occupied variance for this node
+and position. It is your reference for every later comparison.</div></div>
+
+
+<h2 id="p6">Phase 6 — Vitals</h2>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s6.1"><label for="s6.1">Step 6.1 — Switch the node to Tier 2</label></h3>
+<pre><code>PS&gt; &amp; $py firmware\esp32-csi-node\provision.py --port COM3 --edge-tier 2</code></pre>
+<p>Only the changed key is written; SSID and target survive. Power-cycle the node.</p>
+<h4>What Tier 2 adds on-device</h4>
+<ul>
+<li>Breathing: biquad IIR bandpass <strong>0.1–0.5 Hz</strong>, zero-crossing → 6–30 BPM</li>
+<li>Heart rate: bandpass <strong>0.8–2.0 Hz</strong> → 40–120 BPM</li>
+<li>Presence: phase variance vs an adaptively calibrated threshold (60 s ambient learning <strong>at boot</strong>)</li>
+<li>Fall: phase acceleration over threshold</li>
+<li>A 32-byte vitals packet (<code>0xC5110002</code>) at 1 Hz</li>
+</ul>
+<div class="box warn"><span class="lbl">⚠ The 60-second ambient calibration happens at boot</span>
+Power-cycle the node <strong>with the room empty</strong>, and stay out for the first minute. Calibrate with a
+person present and the threshold is poisoned for the whole session.</div></div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s6.2"><label for="s6.2">Step 6.2 — Measure breathing</label></h3>
+<h4>Setup that actually works</h4>
+<p>Breathing is a millimetre-scale chest motion, so geometry matters more than anything else:</p>
+<ul>
+<li>Node <strong>1.0–1.5 m</strong> from your chest</li>
+<li>Node at <strong>chest height</strong> when you are seated</li>
+<li>Chest facing the node (chest-centric geometry, per Step 2.4)</li>
+<li><strong>Sit still.</strong> Any gross motion swamps the breathing band completely.</li>
+<li>Quiet RF: no microwave running, no fan directly in the path</li>
+</ul>
+<pre><code>PS&gt; curl.exe http://localhost:3000/api/v1/vital-signs   # host-computed
+PS&gt; curl.exe http://localhost:3000/api/v1/edge-vitals   # node-computed (Tier 2)</code></pre>
+<p>Comparing the two is a genuinely useful cross-check.</p>
+<h4>Protocol — 3 × 2-minute runs</h4>
+<div class="tw"><table>
+<tr><th>Run</th><th>You do</th><th>Expect</th></tr>
+<tr><td>A</td><td>Breathe normally, still</td><td>12–18 BPM</td></tr>
+<tr><td>B</td><td>Breathe deliberately slowly, ~6 s/cycle</td><td>~10 BPM</td></tr>
+<tr><td>C</td><td>Breathe fast, ~2 s/cycle</td><td>~30 BPM</td></tr>
+</table></div>
+<p>Count your actual breaths with a stopwatch. That is your ground truth.</p>
+<div class="box pass"><span class="lbl">✅ Pass</span>Reported BPM <strong>tracks the direction</strong> of A → B → C and lands
+within ±3 BPM of your count in at least 2 of 3 runs.</div>
+<div class="box fail"><span class="lbl">❌ Fail — flat or nonsense</span>Almost always geometry. Move closer, get to
+chest height, hold still. Also confirm the node is still streaming — a silent node reports stale vitals
+rather than erroring.</div></div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s6.3"><label for="s6.3">Step 6.3 — Heart rate (expect this to be hard)</label></h3>
+<p>Heart rate is a <strong>much</strong> weaker signal than breathing: smaller displacement, higher frequency, and
+it sits inside breathing harmonics. Set expectations low.</p>
+<p><strong>Setup:</strong> everything from 6.2, plus node within <strong>~1 m</strong>, and hold your breath for 15–20 s bursts
+to remove the dominant interferer. Compare against a pulse oximeter, fitness watch, or manual radial-pulse count.</p>
+<div class="box pass"><span class="lbl">✅ Pass</span>Within ±10 BPM during breath-hold, on at least some runs.</div>
+<div class="box fail"><span class="lbl">❌ Fail</span>This is a known-weak capability. Record what you saw and move
+on — do not sink hours here.</div></div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s6.4"><label for="s6.4">Step 6.4 — Fall detection</label></h3>
+<div class="box warn"><span class="lbl">⚠ Safety</span>Use a mattress or thick cushion. <strong>Do not actually fall.</strong></div>
+<p>Fall detection is a phase-acceleration threshold with a 3-frame debounce and a 5 s cooldown.
+Default: 2.0 rad/s² (<code>fall_thresh=2000</code>).</p>
+<p>From standing, drop rapidly onto a mattress in view of the node. Watch <code>/api/v1/edge-vitals</code>
+for the fall flag (bit 1 of the flags byte). Tune without reflashing:</p>
+<pre><code>PS&gt; &amp; $py firmware\esp32-csi-node\provision.py --port COM3 --fall-thresh 1500</code></pre>
+<p>(Lower = more sensitive = more false positives.)</p>
+<div class="box pass"><span class="lbl">✅ Pass</span>Flag fires on 3 of 5 deliberate drops, without firing during normal walking.</div></div>
+
+
+<h2 id="p7">Phase 7 — Per-room calibration &amp; training</h2>
+<div class="box goal"><span class="lbl">Goal</span>The ADR-151 pipeline — baseline → enrollment → trained
+specialist bank → live inference.</div>
+<div class="box why"><span class="lbl">Why this phase matters most</span>Everything so far has been fixed
+thresholds. This is the part of the repo that actually <strong>learns your room</strong>: a per-subcarrier statistical
+baseline of your empty space, a labelled recording of you in a set of postures, and a bank of small
+specialist models (presence / posture / breathing / heartbeat / restlessness / anomaly). Pure Rust, runs on
+the edge, and — unlike the pose path — real and complete.</div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s7.1"><label for="s7.1">Step 7.1 — Back to raw CSI</label></h3>
+<pre><code>PS&gt; &amp; $py firmware\esp32-csi-node\provision.py --port COM3 --edge-tier 0</code></pre>
+<p>Power-cycle. Stop <code>sensing-server</code> — <strong>it and the CLI both want UDP 5005</strong>, and only one
+process can bind it.</p></div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s7.2"><label for="s7.2">Step 7.2 — Empty-room baseline</label></h3>
+<div class="box goal"><span class="lbl">Goal</span>A per-subcarrier statistical model of your room with nobody in
+it (Welford amplitude mean/variance + von Mises phase statistics).</div>
+<pre><code>PS&gt; cd $repo\v2
+PS&gt; mkdir ..\ruview-data -Force
+PS&gt; .\target\release\wifi-densepose.exe calibrate `
+      --udp-port 5005 --bind 0.0.0.0 `
+      --duration-s 30 --tier ht20 `
+      --output ..\ruview-data\baseline-node1.bin</code></pre>
+<div class="box warn"><span class="lbl">⚠</span>Leave the room immediately and stay out for the full 30 seconds.</div>
+<p><code>--tier</code> must match your PHY. Valid: <code>ht20</code> / <code>ht40</code> / <code>he20</code> / <code>he40</code>.
+HT20 at 20 Hz needs 600 frames = 30 s. There is an abort guard: if the running z-score exceeds
+<code>--abort-z-threshold</code> (default 2.0), it aborts rather than bake a person into the baseline.</p>
+<div class="box pass"><span class="lbl">✅ Pass</span><code>[calibrate] summary: frames=600 tier=Ht20 subcarriers=52</code>
+and the file is written.</div>
+<div class="box fail"><span class="lbl">❌ Fail — aborts on z-threshold</span>Something moved. A person, a pet, a fan,
+a door. Re-run with the room genuinely still.</div>
+<div class="box fail"><span class="lbl">❌ Fail — too few frames</span>The node is not streaming at 20 Hz. Back to Step 5.1.</div></div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s7.3"><label for="s7.3">Step 7.3 — Guided enrollment</label></h3>
+<p>The CLI walks a fixed sequence, prompting on screen and re-prompting any capture that fails its quality gate:</p>
+<div class="tw"><table>
+<tr><th>#</th><th>Anchor</th><th>Prompt</th><th>Duration</th></tr>
+<tr><td>1</td><td><code>empty</code></td><td>Leave the room empty and still</td><td>~15 s</td></tr>
+<tr><td>2</td><td><code>stand_still</code></td><td>Stand still, in view of the sensor</td><td>~15 s</td></tr>
+<tr><td>3</td><td><code>sit</code></td><td>Sit down and stay still</td><td>~15 s</td></tr>
+<tr><td>4</td><td><code>lie_down</code></td><td>Lie down and stay still</td><td>~15 s</td></tr>
+<tr><td>5</td><td><code>breathe_slow</code></td><td>Lie or sit still and breathe slowly</td><td><strong>30 s</strong></td></tr>
+<tr><td>6</td><td><code>breathe_normal</code></td><td>Stay still and breathe normally</td><td><strong>30 s</strong></td></tr>
+<tr><td>7</td><td><code>small_move</code></td><td>Make small movements (wave a hand, shift)</td><td>~15 s</td></tr>
+<tr><td>8</td><td><code>sleep_posture</code></td><td>Lie in your sleep posture and relax</td><td><strong>30 s</strong></td></tr>
+</table></div>
+<pre><code>PS&gt; .\target\release\wifi-densepose.exe enroll `
+      --udp-port 5005 --bind 0.0.0.0 `
+      --baseline ..\ruview-data\baseline-node1.bin `
+      --room-id living-room --tier ht20 --fs-hz 15 `
+      --attempts 2 `
+      --output ..\ruview-data\enrollment-node1.json</code></pre>
+<pre><code>[enroll] empty — Leave the room empty and still…
+[enroll]   accepted  z=0.4  motion=2.1%  frames=225
+[enroll] stand_still — Stand still, in view of the sensor…
+...
+[enroll] done: 8/8 anchors accepted → ...\enrollment-node1.json (next: `train-room`)</code></pre>
+<div class="box pass"><span class="lbl">✅ Pass</span>≥ 6 of 8 anchors accepted.</div>
+<div class="box fail"><span class="lbl">❌ Fail — <code>empty</code> rejected</span>Something in the room is moving. Same fix as 7.2.</div>
+<div class="box fail"><span class="lbl">❌ Fail — postures rejected</span>You are too far from the node, or too still
+to be distinguishable. Move to 1–2 m and make the postures more distinct.</div>
+<div class="box note"><span class="lbl">Practical tip</span>Enrollment is ~4 minutes of you moving between postures
+while the laptop is in another room. Put the terminal where you can see it, or have someone read the prompts.</div></div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s7.4"><label for="s7.4">Step 7.4 — Train the specialist bank</label></h3>
+<pre><code>PS&gt; .\target\release\wifi-densepose.exe train-room `
+      --enrollment ..\ruview-data\enrollment-node1.json `
+      --output ..\ruview-data\bank-node1.json
+
+PS&gt; .\target\release\wifi-densepose.exe room-status --bank ..\ruview-data\bank-node1.json</code></pre>
+<p>The "no transceiver geometry recorded" warning is expected for a single node — you supply geometry in Phase 9.</p>
+<div class="box pass"><span class="lbl">✅ Pass</span>At least Presence, Posture and Breathing specialists trained.</div></div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s7.5"><label for="s7.5">Step 7.5 — Live inference</label></h3>
+<pre><code>PS&gt; .\target\release\wifi-densepose.exe room-watch `
+      --bank ..\ruview-data\bank-node1.json `
+      --udp-port 5005 --bind 0.0.0.0 `
+      --tier ht20 --fs-hz 15 --window 200 --seconds 0</code></pre>
+<p><code>--window 200</code> at 15 Hz ≈ a 13 s rolling window. <code>--seconds 0</code> = until <kbd>Ctrl</kbd>+<kbd>C</kbd>.</p>
+<pre><code>presence=present posture=sitting  breathing=15.3bpm heart=68bpm  restless=0.12</code></pre>
+<p>Flags <code>VETO</code> (anomaly specialist rejected the inference) and <code>STALE</code> (window too old) may appear.</p>
+<h4>Validation protocol</h4>
+<div class="tw"><table>
+<tr><th>Ground truth</th><th>Expect</th></tr>
+<tr><td>Leave the room, 60 s</td><td><code>presence=empty</code></td></tr>
+<tr><td>Walk in, stand, 60 s</td><td><code>presence=present posture=standing</code></td></tr>
+<tr><td>Sit, 60 s</td><td><code>posture=sitting</code></td></tr>
+<tr><td>Lie down, 60 s</td><td><code>posture=lying</code></td></tr>
+<tr><td>Sit still, breathe slowly</td><td>breathing drops toward ~10 BPM</td></tr>
+<tr><td>Fidget continuously</td><td><code>restless</code> rises</td></tr>
+</table></div>
+<div class="box pass"><span class="lbl">✅ Pass</span>Presence correct ≥ 80% of seconds; posture transitions in the right
+direction within ~15 s (one window) of the real change.</div>
+<div class="box fail"><span class="lbl">❌ Fail — everything <code>-</code></span>The window has not filled (needs ≥ 32
+frames). Give it 5 s and confirm CSI is still flowing.</div>
+<div class="box fail"><span class="lbl">❌ Fail — posture always the same</span>Anchors were not distinguishable at
+enrollment. Re-enroll with more separation between postures.</div>
+<div class="box note"><span class="lbl">📌 Headline result</span>This is your single-node number. Record the confusion
+matrix: for each of the 4 ground-truth states, what fraction of seconds got each label.</div></div>
+
+
+<h2 id="p8">Phase 8 — Scale to 6 nodes</h2>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s8.1"><label for="s8.1">Step 8.1 — Layout</label></h3>
+<p>Use your Step 2.4 sketch. Principles from those scripts:</p>
+<ul>
+<li><strong>Chest height, ~1.0–1.2 m.</strong> Not floor, not ceiling.</li>
+<li><strong>Surround the subject volume.</strong> Angular diversity is what multistatic buys you; six nodes along
+one wall is barely better than one.</li>
+<li><strong>≥ 1 m from large metal</strong> (radiators, filing cabinets, fridges).</li>
+<li><strong>Line of sight to the target zone</strong> for at least 3 nodes.</li>
+<li><strong>Measure and write down</strong> each node's (x, y, z) in a room frame with a fixed origin and axis
+convention. You need real numbers for the geometry file.</li>
+</ul>
+<div class="ascii">        ┌──────────────────────────────────┐
+        │  N2                          N3  │   z = 1.1 m for all
+        │                                  │
+        │            [subject]             │
+        │  N1                          N4  │
+        │                                  │
+        │       N6              N5         │
+        └──────────────────────────────────┘</div></div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s8.2"><label for="s8.2">Step 8.2 — Flash and provision all six</label></h3>
+<p>Flash each board with the identical binaries from Step 3.4. Plug boards in one at a time and note the
+COM port each enumerates as.</p>
+<pre><code>PS&gt; $py   = 'C:\Espressif\tools\python\v6.0.2\venv\Scripts\python.exe'
+PS&gt; $prov = "$repo\firmware\esp32-csi-node\provision.py"
+PS&gt; $ssid = 'YourWiFi'; $pass = 'YourPassword'; $host_ip = '192.168.1.20'
+
+# Repeat per board, changing -port / -node-id / -tdm-slot:
+PS&gt; &amp; $py $prov --port COM3 --ssid $ssid --password $pass `
+      --target-ip $host_ip --target-port 5005 `
+      --node-id 1 --tdm-slot 0 --tdm-total 6 --edge-tier 0</code></pre>
+<div class="tw"><table>
+<tr><th>Board</th><th><code>--node-id</code></th><th><code>--tdm-slot</code></th></tr>
+<tr><td>1</td><td>1</td><td>0</td></tr><tr><td>2</td><td>2</td><td>1</td></tr>
+<tr><td>3</td><td>3</td><td>2</td></tr><tr><td>4</td><td>4</td><td>3</td></tr>
+<tr><td>5</td><td>5</td><td>4</td></tr><tr><td>6</td><td>6</td><td>5</td></tr>
+</table></div>
+<div class="box why"><span class="lbl">Why TDM</span>Six nodes transmitting continuously on the same channel
+interfere with each other and with your actual WiFi. Time-division multiplexing gives each node its own
+transmit slot in a repeating cycle. <code>--tdm-total 6</code> tells each node how many slots exist.</div>
+<pre><code>PS&gt; &amp; $py $prov --port COM3 --state    # verify without flashing</code></pre>
+<div class="box warn"><span class="lbl">⚠ Duplicate node IDs</span>The most common multi-node mistake, and it produces
+very confusing symptoms — frames from two physical nodes merge into one logical node. Verify every board.</div></div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s8.3"><label for="s8.3">Step 8.3 — Thermal check</label></h3>
+<div class="box warn"><span class="lbl">⚠</span>Your boards run the WiFi radio with modem sleep <strong>disabled</strong>
+(<code>WIFI_PS_NONE</code>, required for continuous CSI) plus a DSP pipeline. Sustained high current, no duty cycling.</div>
+<p>Power all six, then <strong>touch each board after 2, 5 and 10 minutes.</strong></p>
+<p>Warm is normal. <strong>Uncomfortably hot is not</strong> — the repo documents at least one field report of a board that
+ran hot and then failed to power on again (regulator damage suspected).</p>
+<p>If a board is too hot to hold: power it down, give it airflow, do not stack or enclose them, and consider:</p>
+<pre><code>PS&gt; &amp; $py $prov --port COM3 --power-duty 60</code></pre></div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s8.4"><label for="s8.4">Step 8.4 — Confirm all six arrive</label></h3>
+<pre><code>PS&gt; cd $repo\v2
+PS&gt; .\target\release\sensing-server.exe `
+      --source esp32 --udp-port 5005 --http-port 3000 --ws-port 3001 `
+      --bind-addr 0.0.0.0 `
+      --ui-path C:\Users\otaia0a\Desktop\RuView\ui
+
+# other terminal
+PS&gt; curl.exe http://localhost:3000/api/v1/nodes
+PS&gt; curl.exe http://localhost:3000/api/v1/mesh
+PS&gt; curl.exe http://localhost:3000/api/v1/mesh/metrics</code></pre>
+<div class="box pass"><span class="lbl">✅ Pass</span>6 distinct nodes, each ≥ 15 pps.</div>
+<div class="box fail"><span class="lbl">❌ Fail — only one node, and you are using Docker</span>
+The Windows Docker multi-source UDP bug. Run natively, or start the relay:
+<pre><code>PS&gt; python scripts\udp-relay.py --listen-port 5005 --forward-port 5006 --verbose</code></pre>
+and remap the container to <code>5006:5005/udp</code>. <code>--verbose</code> prints one line per packet — you should
+see all six source IPs.</div>
+<div class="box fail"><span class="lbl">❌ Fail — fewer than six, running natively</span>Check for duplicate
+<code>node_id</code> (Step 8.2), then power-cycle the missing nodes (post-flash limp state).</div>
+<div class="box fail"><span class="lbl">❌ Fail — all six appear but throughput drops</span>
+Six nodes at 20 Hz is ~30 KB/s of UDP plus your normal WiFi. Reduce with a smaller <code>--subk-count</code>,
+or move some nodes to another channel: <code>&amp; $py $prov --port COM5 --channel 11</code></div></div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s8.5"><label for="s8.5">Step 8.5 — Optional: channel hopping</label></h3>
+<p>Multi-band capture increases sensing bandwidth ~3× by using more of the spectrum (and your neighbours' APs
+as free illuminators).</p>
+<pre><code>PS&gt; &amp; $py $prov --port COM3 --hop-channels "1,6,11" --hop-dwell 200</code></pre>
+<div class="box warn"><span class="lbl">⚠ Trade-off</span>Per-channel frame rate drops proportionally (three channels
+at 200 ms dwell → each sampled ~1/3 of the time). <strong>Do not enable during calibration or enrollment</strong> —
+those assume a stable channel.</div></div>
+
+
+<h2 id="p9">Phase 9 — Multistatic &amp; through-wall</h2>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s9.1"><label for="s9.1">Step 9.1 — Node geometry file</label></h3>
+<div class="box why"><span class="lbl">Why</span>Attention-weighted multistatic fusion uses geometric diversity to
+weight each node's contribution. Without positions every node is weighted the same, throwing away most of the
+benefit of having six.</div>
+<p>A JSON array of <code>NodeGeometry</code> records
+(<code>v2/crates/wifi-densepose-calibration/src/geometry.rs</code>). Positions in <strong>metres</strong>, angles in
+<strong>radians</strong>, in whatever room frame you defined in Step 8.1. Write <code>..\ruview-data\geometry.json</code>:</p>
+<pre><code>[
+  { "node_id": 1, "position": {"x_m": 0.0, "y_m": 0.0, "z_m": 1.1},
+    "orientation": {"azimuth_rad": 0.785, "elevation_rad": 0.0},
+    "method": "tape-measure" },
+  { "node_id": 2, "position": {"x_m": 0.0, "y_m": 4.0, "z_m": 1.1},
+    "orientation": {"azimuth_rad": -0.785, "elevation_rad": 0.0},
+    "method": "tape-measure" },
+  { "node_id": 3, "position": {"x_m": 5.0, "y_m": 4.0, "z_m": 1.1},
+    "orientation": {"azimuth_rad": 3.927, "elevation_rad": 0.0},
+    "method": "tape-measure" },
+  { "node_id": 4, "position": {"x_m": 5.0, "y_m": 0.0, "z_m": 1.1},
+    "orientation": {"azimuth_rad": 2.356, "elevation_rad": 0.0},
+    "method": "tape-measure" },
+  { "node_id": 5, "position": {"x_m": 3.5, "y_m": 0.0, "z_m": 1.1},
+    "orientation": {"azimuth_rad": 1.571, "elevation_rad": 0.0},
+    "method": "tape-measure" },
+  { "node_id": 6, "position": {"x_m": 1.5, "y_m": 0.0, "z_m": 1.1},
+    "orientation": {"azimuth_rad": 1.571, "elevation_rad": 0.0},
+    "method": "tape-measure" }
+]</code></pre>
+<p><code>method</code> is free-form provenance — <code>"tape-measure"</code>, <code>"floor-plan"</code>,
+<code>"unknown"</code>. Be honest; it is recorded into the trained bank.</p>
+<p>Give the sensing server the same positions:</p>
+<pre><code>PS&gt; .\target\release\sensing-server.exe --source esp32 --udp-port 5005 `
+      --http-port 3000 --ws-port 3001 --bind-addr 0.0.0.0 `
+      --node-positions "0,0,1.1;0,4,1.1;5,4,1.1;5,0,1.1;3.5,0,1.1;1.5,0,1.1" `
+      --ui-path C:\Users\otaia0a\Desktop\RuView\ui</code></pre></div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s9.2"><label for="s9.2">Step 9.2 — Per-node banks</label></h3>
+<p>Each node sees the room from a different angle, so <strong>each needs its own baseline, enrollment and bank</strong>.
+No shortcut. For each node in turn: power <strong>only that node</strong>, then run Phase 7 Steps 7.2–7.4 with per-node filenames.</p>
+<pre><code># Repeat with N = 1..6
+PS&gt; .\target\release\wifi-densepose.exe calibrate `
+      --udp-port 5005 --duration-s 30 --tier ht20 `
+      --output ..\ruview-data\baseline-node1.bin
+
+PS&gt; .\target\release\wifi-densepose.exe enroll `
+      --baseline ..\ruview-data\baseline-node1.bin `
+      --room-id living-room --tier ht20 --fs-hz 15 `
+      --output ..\ruview-data\enrollment-node1.json
+
+PS&gt; .\target\release\wifi-densepose.exe train-room `
+      --enrollment ..\ruview-data\enrollment-node1.json `
+      --geometry ..\ruview-data\geometry.json `
+      --output ..\ruview-data\bank-node1.json</code></pre>
+<p>With <code>--geometry</code> supplied, <code>train-room</code> snapshots the layout into each bank and prints
+<code>[train-room] geometry: 6 node(s) snapshotted into the bank</code>.</p>
+<div class="box warn"><span class="lbl">⚠ Budget realistically</span>~10 minutes per node × 6 = <strong>an hour of
+enrollment</strong>. The most tedious part of the plan, and also what makes the multistatic result meaningful.
+Do not rush the anchors.</div></div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s9.3"><label for="s9.3">Step 9.3 — Multistatic room-watch</label></h3>
+<pre><code>PS&gt; .\target\release\wifi-densepose.exe room-watch `
+      --node-bank 1:..\ruview-data\bank-node1.json `
+      --node-bank 2:..\ruview-data\bank-node2.json `
+      --node-bank 3:..\ruview-data\bank-node3.json `
+      --node-bank 4:..\ruview-data\bank-node4.json `
+      --node-bank 5:..\ruview-data\bank-node5.json `
+      --node-bank 6:..\ruview-data\bank-node6.json `
+      --udp-port 5005 --bind 0.0.0.0 `
+      --tier ht20 --fs-hz 15 --window 200</code></pre>
+<pre><code>[room-watch] multistatic over nodes [1, 2, 3, 4, 5, 6]
+[room-watch] fusing on udp://0.0.0.0:5005 (window=200 frames)
+presence=present posture=sitting  breathing=15.1bpm heart=71bpm  restless=0.09</code></pre>
+<div class="box goal"><span class="lbl">The experiment that justifies six nodes</span>
+Run the <em>same</em> validation protocol as Step 7.5, twice: once single-node
+(<code>--bank ..\ruview-data\bank-node1.json</code>), once with all six. Compare accuracy on identical ground truth.</div>
+<div class="box pass"><span class="lbl">✅ Pass</span>Multistatic beats single-node on presence and/or posture accuracy.
+Any measurable improvement is a real result — <strong>write down the actual numbers</strong>, not an impression.</div></div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s9.4"><label for="s9.4">Step 9.4 — Through-wall</label></h3>
+<h4>Physics, so you know what to expect</h4>
+<p>One-way attenuation at 2.4 GHz, approximately:</p>
+<div class="tw"><table>
+<tr><th>Material</th><th>Loss</th></tr>
+<tr><td>Drywall / plasterboard</td><td>3–5 dB</td></tr>
+<tr><td>Wooden door</td><td>3–6 dB</td></tr>
+<tr><td>Brick</td><td>8–15 dB</td></tr>
+<tr><td>Concrete</td><td>15–25 dB</td></tr>
+<tr><td>Reinforced concrete / metal mesh</td><td>25 dB+ — effectively opaque</td></tr>
+</table></div>
+<p>The repo claims through-wall to <strong>~5 m, signal-dependent</strong>. Drywall works well. Reinforced concrete does
+not. Start with the easiest wall you have.</p>
+<ol>
+<li>Put 2–3 nodes on one side of an interior drywall wall.</li>
+<li>Record an empty-room baseline <strong>with nobody on either side</strong>:
+<pre><code>PS&gt; .\target\release\wifi-densepose.exe calibrate --duration-s 60 `
+      --output ..\ruview-data\baseline-throughwall.bin</code></pre></li>
+<li>Have someone walk on the far side while you watch amplitude variance and presence.</li>
+<li>Alternate 60 s present / 60 s absent, <strong>five cycles</strong>, logging each.</li>
+</ol>
+<div class="box pass"><span class="lbl">✅ Pass</span>Presence tracks the far-side person on ≥ 3 of 5 cycles.</div>
+<div class="box fail"><span class="lbl">❌ Fail</span>Thicker wall than expected, or too far. Move nodes closer to the
+wall, try a doorway (huge difference), and confirm same-side detection still works so you know the nodes are healthy.</div>
+<div class="box warn"><span class="lbl">⚠ Guard against fooling yourself</span>Through-wall demos are easy to fake
+accidentally — footsteps vibrating the floor, a door moving, the person's phone associating with the AP. Run a
+<strong>negative control</strong>: the same five cycles with the far-side person replaced by nothing at all. If your
+detector fires anyway, you are measuring something other than the person.</div></div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s9.5"><label for="s9.5">Step 9.5 — Multi-person</label></h3>
+<div class="box warn"><span class="lbl">⚠ Set expectations first</span>TROUBLESHOOTING §2 is honest about this: the
+current dedup factor is "a guess", and <code>estimated_persons</code> read <strong>6–8 for 5 bodies</strong>. Treat this as
+characterisation, not validation.</div>
+<p>With all six nodes fused, step occupancy 0 → 1 → 2 → 3 people, 60 s each, logging
+<code>estimated_persons</code> from <code>/api/v1/sensing/latest</code>. Runtime tuning knob:</p>
+<pre><code>PS&gt; curl.exe -X POST http://localhost:3000/api/v1/config/dedup-factor `
+      -H "Content-Type: application/json" -d "{\"factor\": 2.5}"</code></pre>
+<div class="box pass"><span class="lbl">✅ Pass</span>The reported count <strong>increases monotonically</strong> with true
+occupancy. Absolute accuracy is not expected.</div></div>
+
+
+<h2 id="p10">Phase 10 — Record, analyse, report</h2>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s10.1"><label for="s10.1">Step 10.1 — Capture datasets</label></h3>
+<div class="box why"><span class="lbl">Why</span>Recording raw CSI lets you re-run analysis without re-running the
+experiment — which matters, because physical experiments are expensive and irreproducible.</div>
+<pre><code>PS&gt; python scripts\record-csi-udp.py --duration 600 --output data\recordings\empty-room
+PS&gt; python scripts\record-csi-udp.py --duration 600 --output data\recordings\one-person-still
+PS&gt; python scripts\record-csi-udp.py --duration 600 --output data\recordings\one-person-moving
+PS&gt; python scripts\record-csi-udp.py --duration 600 --output data\recordings\through-wall</code></pre>
+<p>The server also has a recording API:</p>
+<pre><code>PS&gt; curl.exe -X POST http://localhost:3000/api/v1/recording/start
+PS&gt; curl.exe http://localhost:3000/api/v1/recording/list
+PS&gt; curl.exe -X POST http://localhost:3000/api/v1/recording/stop</code></pre></div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s10.2"><label for="s10.2">Step 10.2 — Overnight run</label></h3>
+<div class="box goal"><span class="lbl">Goal</span>Stability, drift, and thermal behaviour over hours — the things a
+20-minute test cannot show.</div>
+<pre><code>PS&gt; python scripts\overnight-empty-capture.py</code></pre>
+<p>Next morning, check:</p>
+<ul>
+<li>Are all six nodes still streaming? (<code>/api/v1/nodes</code>)</li>
+<li>Did presence false-positive in an empty room, and how often?</li>
+<li>Did breathing / heart rate drift?</li>
+<li>Are any boards hot?</li>
+</ul>
+<p>This is where you find out whether the baseline holds as the room's temperature, furniture, and RF
+environment change.</p></div>
+
+<div class="step"><h3><input type="checkbox" class="chk" id="s10.3"><label for="s10.3">Step 10.3 — Write it up</label></h3>
+<div class="tw"><table>
+<tr><th>Test</th><th>Ground truth</th><th>Measured</th><th>Error</th><th>Verdict</th></tr>
+<tr><td>CSI rate, node 1</td><td>—</td><td>___ pps</td><td>—</td><td></td></tr>
+<tr><td>Breathing, normal</td><td>___ BPM (counted)</td><td>___ BPM</td><td>___</td><td></td></tr>
+<tr><td>Breathing, slow</td><td>___ BPM</td><td>___ BPM</td><td>___</td><td></td></tr>
+<tr><td>Breathing, fast</td><td>___ BPM</td><td>___ BPM</td><td>___</td><td></td></tr>
+<tr><td>Heart rate, breath-hold</td><td>___ BPM (oximeter)</td><td>___ BPM</td><td>___</td><td></td></tr>
+<tr><td>Presence, single node</td><td>occupied/empty</td><td>___% correct</td><td>—</td><td></td></tr>
+<tr><td>Presence, 6-node fused</td><td>occupied/empty</td><td>___% correct</td><td>—</td><td></td></tr>
+<tr><td>Posture, single node</td><td>4 classes</td><td>___% correct</td><td>—</td><td></td></tr>
+<tr><td>Posture, 6-node fused</td><td>4 classes</td><td>___% correct</td><td>—</td><td></td></tr>
+<tr><td>Fall detection</td><td>5 drops</td><td>___/5</td><td>—</td><td></td></tr>
+<tr><td>Through-wall</td><td>5 cycles</td><td>___/5</td><td>—</td><td></td></tr>
+<tr><td>Through-wall, negative control</td><td>0 cycles</td><td>___ false fires</td><td>—</td><td></td></tr>
+<tr><td>Person count</td><td>0,1,2,3</td><td>___</td><td>—</td><td>monotonic?</td></tr>
+<tr><td>Overnight stability</td><td>8 h</td><td>___ nodes alive</td><td>—</td><td></td></tr>
+</table></div>
+<div class="box note"><span class="lbl">Report honestly</span>State how each number was measured, what the ground truth
+was, and how many trials. A well-characterised 70% is far more valuable than an unreproducible 95%. That standard
+is the repo's own, and it is worth keeping.</div></div>
+
+
+<h2 id="a">Appendix A — Troubleshooting index</h2>
+<div class="tw"><table>
+<tr><th>Symptom</th><th>Likely cause</th><th>Fix</th></tr>
+<tr><td>Node on WiFi, <strong>0 pps CSI</strong></td><td>Display probe false-positive keeping MGMT-only filter</td><td>Rebuild with <code># CONFIG_DISPLAY_ENABLE is not set</code> (Step 3.2)</td></tr>
+<tr><td>Serial monitor completely silent</td><td>Console on UART0, board is native-USB only</td><td><code>CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y</code> (Step 3.2)</td></tr>
+<tr><td>Only 1 of 6 nodes visible</td><td>Docker Desktop Windows multi-source UDP drop</td><td>Run natively, or <code>scripts/udp-relay.py</code> (TROUBLESHOOTING §9)</td></tr>
+<tr><td><code>cargo</code> fails: workspace member manifest</td><td>Submodules not initialised</td><td><code>git submodule update --init --recursive</code></td></tr>
+<tr><td>Zero UDP packets received</td><td>Windows Firewall</td><td>Allow <code>python.exe</code> / <code>sensing-server.exe</code> inbound, Private profile</td></tr>
+<tr><td>UI returns 404</td><td>cwd-relative <code>--ui-path</code></td><td>Pass an absolute path</td></tr>
+<tr><td><code>Address already in use</code> on 5005</td><td>Two processes want the port</td><td>Run one; or <code>scripts/csi-udp-relay.py</code> to a loopback port</td></tr>
+<tr><td>Node associates then goes quiet</td><td>Post-flash limp state</td><td>Power-cycle: unplug, 2 s, replug</td></tr>
+<tr><td>Boot loop on <code>--edge-tier 1</code>/<code>2</code></td><td>Old firmware WDT bug</td><td>You are on v0.8.4; if it recurs, capture the backtrace (#438)</td></tr>
+<tr><td>Person count stuck / overcounts</td><td>Known heuristic limitation</td><td>Tune <code>dedup-factor</code>; expect monotonic, not accurate</td></tr>
+<tr><td>Vitals jitter between nodes</td><td>Best-node selection is authoritative</td><td>Expected; per-node smoothing already applied</td></tr>
+<tr><td>WiFi won't associate</td><td>5 GHz-only SSID</td><td>ESP32-S3 is 2.4 GHz only</td></tr>
+<tr><td>Board very hot</td><td><code>WIFI_PS_NONE</code> + DSP, no duty cycling</td><td>Airflow; <code>--power-duty 60</code></td></tr>
+<tr><td><code>--model</code> errors on magic</td><td>HF weights are JSONL RVF; loader wants binary</td><td>Run without <code>--model</code></td></tr>
+</table></div>
+<p>Fuller writeups: <code>docs/TROUBLESHOOTING.md</code> (11 reproduced field failures).</p>
+
+
+<h2 id="b">Appendix B — Command reference</h2>
+<pre><code># ── Setup ────────────────────────────────────────────────────────────────
+$py   = 'C:\Espressif\tools\python\v6.0.2\venv\Scripts\python.exe'
+$repo = 'C:\Users\otaia0a\Desktop\RuView'
+$prov = "$repo\firmware\esp32-csi-node\provision.py"
+
+# ── Hardware identification ──────────────────────────────────────────────
+&amp; $py -m esptool --port COM3 --no-stub flash-id     # chip, flash, MAC
+&amp; $py -m espefuse --port COM3 summary               # PSRAM, package, USB
+Get-CimInstance Win32_SerialPort | Select DeviceID, Description
+
+# ── Flash ────────────────────────────────────────────────────────────────
+&amp; $py -m esptool --chip esp32s3 --port COM3 --baud 460800 `
+  write_flash --flash_mode dio --flash_size 8MB `
+  0x0 build\bootloader\bootloader.bin `
+  0x8000 build\partition_table\partition-table.bin `
+  0xf000 build\ota_data_initial.bin `
+  0x20000 build\esp32-csi-node.bin
+
+# ── Provision (NVS, no reflash) ──────────────────────────────────────────
+&amp; $py $prov --port COM3 --ssid S --password P --target-ip IP --node-id 1 --edge-tier 0
+&amp; $py $prov --port COM3 --edge-tier 2               # switch tier only
+&amp; $py $prov --port COM3 --state                     # dry-run: show merged state
+&amp; $py $prov --port COM3 --reset                     # wipe this port's state file
+
+# ── Serial ───────────────────────────────────────────────────────────────
+&amp; $py -m serial.tools.miniterm COM3 115200          # exit: Ctrl+]
+
+# ── Server ───────────────────────────────────────────────────────────────
+cd $repo\v2
+.\target\release\sensing-server.exe --source esp32 --udp-port 5005 `
+  --http-port 3000 --ws-port 3001 --bind-addr 0.0.0.0 `
+  --ui-path C:\Users\otaia0a\Desktop\RuView\ui
+
+# ── API ──────────────────────────────────────────────────────────────────
+curl.exe http://localhost:3000/health
+curl.exe http://localhost:3000/api/v1/nodes
+curl.exe http://localhost:3000/api/v1/sensing/latest
+curl.exe http://localhost:3000/api/v1/vital-signs
+curl.exe http://localhost:3000/api/v1/edge-vitals
+curl.exe http://localhost:3000/api/v1/mesh
+curl.exe http://localhost:3000/api/v1/mesh/metrics
+
+# ── Calibration pipeline ─────────────────────────────────────────────────
+.\target\release\wifi-densepose.exe calibrate   --duration-s 30 --output baseline.bin
+.\target\release\wifi-densepose.exe enroll      --baseline baseline.bin --room-id R --output enroll.json
+.\target\release\wifi-densepose.exe train-room  --enrollment enroll.json --geometry geo.json --output bank.json
+.\target\release\wifi-densepose.exe room-status --bank bank.json
+.\target\release\wifi-densepose.exe room-watch  --bank bank.json
+.\target\release\wifi-densepose.exe room-watch  --node-bank 1:b1.json --node-bank 2:b2.json
+
+# ── No-hardware testing ──────────────────────────────────────────────────
+python scripts\synth-csi-udp.py --port 5005 --duration-s 120 --motion-after-s 30
+python archive\v1\data\proof\verify.py
+python scripts\record-csi-udp.py --duration 300 --output data\recordings
+python scripts\udp-relay.py --listen-port 5005 --forward-port 5006 --verbose
+
+# ── Tests ────────────────────────────────────────────────────────────────
+cd $repo\v2; cargo test --workspace --no-default-features</code></pre>
+
+
+<h2 id="c">Appendix C — Node log sheet</h2>
+<p>Copy per node. The tedium pays for itself the first time two nodes disagree.</p>
+<pre><code>NODE ___
+
+  COM port at provisioning     ______
+  MAC                          ______________________
+  node_id                      ______
+  tdm_slot / tdm_total         ______ / 6
+  edge_tier                    ______
+  channel                      ______
+  Position  x / y / z  (m)     ______ / ______ / ______
+  Orientation azimuth (rad)    ______
+  Firmware SHA-256 (app)       __________________________________
+
+  Flashed                 ☐    date ____________
+  Boots, console readable ☐
+  Joins WiFi              ☐
+  CSI rate at host        ____ pps        ☐ ≥15 pps
+  Empty-room variance     ______
+  Occupied variance       ______
+  Baseline captured       ☐    file ____________________
+  Enrollment  __/8 anchors     file ____________________
+  Bank trained            ☐    specialists: ______________
+  Thermal @10 min              ☐ cool  ☐ warm  ☐ HOT — investigate
+
+  Notes:
+  ______________________________________________________________</code></pre>
+
+
+<h2 id="d">Appendix D — Where to read more</h2>
+<div class="tw"><table>
+<tr><th>Topic</th><th>File</th></tr>
+<tr><td>Operator guide (2,500 lines — the best single doc)</td><td><code>docs/user-guide.md</code></td></tr>
+<tr><td>Firmware internals, NVS keys, wire formats</td><td><code>firmware/esp32-csi-node/README.md</code></td></tr>
+<tr><td>11 reproduced field failures + fixes</td><td><code>docs/TROUBLESHOOTING.md</code></td></tr>
+<tr><td>Per-room calibration design</td><td><code>docs/adr/ADR-151-*.md</code></td></tr>
+<tr><td>Multistatic mesh</td><td><code>docs/adr/ADR-029-*.md</code></td></tr>
+<tr><td>Mesh security hardening</td><td><code>docs/adr/ADR-032-*.md</code></td></tr>
+<tr><td>CSI frame format</td><td><code>docs/adr/ADR-018-*.md</code></td></tr>
+<tr><td>Edge intelligence tiers</td><td><code>docs/adr/ADR-039-*.md</code></td></tr>
+<tr><td>Vital signs</td><td><code>docs/adr/ADR-021-*.md</code></td></tr>
+<tr><td>Physics + placement studies</td><td><code>examples/research-sota/</code></td></tr>
+<tr><td>Repo conventions and gotchas</td><td><code>CLAUDE.md</code></td></tr>
+</table></div>
+
+</main>
+</div>
+
+<script>
+(function(){
+  // ── theme ──
+  var root=document.documentElement, tt=document.getElementById('tt');
+  var saved=localStorage.getItem('rv-theme'); if(saved) root.setAttribute('data-theme',saved);
+  tt.onclick=function(){
+    var cur=root.getAttribute('data-theme');
+    if(!cur) cur=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';
+    var next=cur==='dark'?'light':'dark';
+    root.setAttribute('data-theme',next); localStorage.setItem('rv-theme',next);
+  };
+
+  // ── copy buttons ──
+  document.querySelectorAll('pre').forEach(function(pre){
+    var b=document.createElement('button'); b.className='copy'; b.textContent='copy';
+    b.onclick=function(){
+      var t=pre.querySelector('code'); t=t?t.innerText:pre.innerText;
+      navigator.clipboard.writeText(t).then(function(){
+        b.textContent='copied'; b.classList.add('done');
+        setTimeout(function(){b.textContent='copy'; b.classList.remove('done');},1400);
+      });
+    };
+    pre.appendChild(b);
+  });
+
+  // ── checkbox persistence + progress ──
+  var boxes=Array.prototype.slice.call(document.querySelectorAll('.chk'));
+  var pb=document.getElementById('pb'), pt=document.getElementById('pt');
+  function paint(){
+    var n=boxes.filter(function(b){return b.checked;}).length;
+    pt.textContent=n+' / '+boxes.length+' steps';
+    pb.style.width=(boxes.length?(n/boxes.length*100):0)+'%';
+  }
+  boxes.forEach(function(b){
+    b.checked = localStorage.getItem('rv-'+b.id)==='1';
+    b.addEventListener('change',function(){
+      localStorage.setItem('rv-'+b.id, b.checked?'1':'0'); paint();
+    });
+  });
+  paint();
+  document.getElementById('reset').onclick=function(){
+    if(!confirm('Clear all step checkboxes?')) return;
+    boxes.forEach(function(b){b.checked=false; localStorage.removeItem('rv-'+b.id);});
+    paint();
+  };
+
+  // ── scroll-spy ──
+  var links=Array.prototype.slice.call(document.querySelectorAll('nav a'));
+  var map={}; links.forEach(function(a){ map[a.getAttribute('href').slice(1)]=a; });
+  var obs=new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if(e.isIntersecting){
+        links.forEach(function(a){a.classList.remove('on');});
+        if(map[e.target.id]) map[e.target.id].classList.add('on');
+      }
+    });
+  },{rootMargin:'-10% 0px -80% 0px'});
+  Object.keys(map).forEach(function(id){
+    var el=document.getElementById(id); if(el) obs.observe(el);
+  });
+})();
+</script>
+</body>
+</html>
